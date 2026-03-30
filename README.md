@@ -52,17 +52,35 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 - Python 3.8+
 - A modern browser (Chrome / Firefox / Safari)
 
-### Run
+### First run — add your first user
 
 ```bash
 git clone https://github.com/yourname/task-tree-planner
 cd task-tree-planner
+python server.py --setup
+```
+
+You will be prompted for a username and password. Credentials are stored in `config.json` as SHA-256 hashes — plaintext passwords are never saved.
+
+### Run
+
+```bash
 python server.py
 ```
 
-Open **http://localhost:8000** in your browser.
+Open **http://localhost:8000** in your browser. You'll see a login page.
 
-The server also binds to `0.0.0.0`, so it's accessible from other devices on your local network (phone, tablet, other machines).
+The server binds to `0.0.0.0`, so it's reachable from other devices on your LAN (phone, tablet, other machines).
+
+### User management
+
+```bash
+python server.py --setup           # add first user
+python server.py --add-user        # add another user
+python server.py --update-user     # change a user's password
+python server.py --remove-user     # remove a user
+python server.py --list-users      # show all usernames
+```
 
 ### Optional: custom port
 
@@ -122,6 +140,22 @@ WEATHER_LON = 23.32
 The server fetches a 7-day forecast and caches historical weather in `weather_history.json`.
 
 ---
+
+## Login & security
+
+The server uses a **session cookie** authentication system with multi-user support:
+
+- Users are stored in `config.json` as `{ "users": { "alice": "<sha256>", "bob": "<sha256>" } }`
+- On successful login a random 64-character session token is set as an `HttpOnly` cookie
+- Sessions expire after **7 days**
+- All routes except `/login` require a valid session — unauthenticated requests redirect to the login page
+- Passwords are validated with `secrets.compare_digest` (constant-time, safe against timing attacks)
+- Failed login attempts are logged with the IP address but never the attempted password
+- **Add `config.json` to `.gitignore`** if you push to a public repo
+
+```
+config.json  ← contains usernames + password hashes, never commit this
+```
 
 ## Running as a systemd service
 
