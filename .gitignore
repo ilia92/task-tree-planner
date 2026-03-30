@@ -1,0 +1,4 @@
+images/*
+data.json
+weather_history.json
+backup_tasks.log

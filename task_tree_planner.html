@@ -1,0 +1,2556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Tree Planner</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --low: #cbd5e1;
+      --medium: #10b981;
+      --high: #f59e0b;
+      --very-high: #ef4444;
+      --done-bg: #e5e7eb;
+      --done-text: #6b7280;
+      --radius: 18px;
+      --shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      padding: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    .subtle { color: var(--muted); font-size: 13px; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button, select, input, textarea { font: inherit; }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      border-radius: 14px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: var(--text);
+      color: white;
+      border-color: var(--text);
+    }
+
+    .btn:hover { opacity: 0.92; }
+
+    .lane-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .panel { padding: 18px; }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .count {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--muted);
+      font-size: 13px;
+      background: #fafafa;
+    }
+
+    .mini-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 12px;
+    }
+
+    .tree-wrap { margin-bottom: 18px; }
+    .legend { color: var(--muted); font-size: 14px; }
+    .roots { display: flex; flex-direction: column; gap: 18px; }
+    .node-wrap { position: relative; }
+
+    .children {
+      margin-top: 12px;
+      margin-left: 22px;
+      padding-left: 18px;
+      border-left: 2px solid var(--line);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 14px;
+    }
+
+    .node-card {
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+      padding: 16px;
+      position: relative;
+      min-height: 132px;
+    }
+
+    .node-card::before {
+      content: "";
+      position: absolute;
+      left: -20px;
+      top: 28px;
+      width: 18px;
+      height: 2px;
+      background: var(--line);
+      display: none;
+    }
+
+    .children > .node-wrap > .node-card::before { display: block; }
+    .priority-very_high { border-color: var(--very-high); }
+    .priority-high { border-color: var(--high); }
+    .priority-medium { border-color: var(--medium); }
+    .priority-low { border-color: var(--low); }
+
+    .priority-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      flex: 0 0 auto;
+    }
+
+    .dot-very_high { background: var(--very-high); }
+    .dot-high { background: var(--high); }
+    .dot-medium { background: var(--medium); }
+    .dot-low { background: #94a3b8; }
+
+    .node-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .node-head-left {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .node-name-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .node-pills-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .node-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fafafa;
+      text-transform: capitalize;
+    }
+
+    .status-open {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .status-in_progress {
+      background: #ecfeff;
+      border-color: #67e8f9;
+      color: #0f766e;
+    }
+
+    .status-blocked {
+      background: #fff7ed;
+      border-color: #fdba74;
+      color: #c2410c;
+    }
+
+    .status-done {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #15803d;
+    }
+
+    .node-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      font-size: 14px;
+    }
+
+    .label { font-weight: 700; margin-bottom: 4px; }
+    .value { color: #374151; white-space: pre-wrap; }
+
+    /* ── Compact / nested rectangle view ─────────────────────────── */
+    .node-card.is-compact {
+      min-height: unset;
+      padding: 12px 14px 14px;
+    }
+
+    .compact-children {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .compact-child-card {
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .compact-child-card.priority-very_high { border-color: var(--very-high); }
+    .compact-child-card.priority-high      { border-color: var(--high); }
+    .compact-child-card.priority-medium    { border-color: var(--medium); }
+    .compact-child-card.priority-low       { border-color: var(--low); }
+
+    .compact-child-name {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    .compact-child-pills {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    /* grandchildren inside a compact-child-card */
+    .compact-grandchildren {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 6px;
+    }
+
+    .compact-grandchild-card {
+      border: 1.5px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .compact-grandchild-card.priority-very_high { border-color: var(--very-high); }
+    .compact-grandchild-card.priority-high      { border-color: var(--high); }
+    .compact-grandchild-card.priority-medium    { border-color: var(--medium); }
+    .compact-grandchild-card.priority-low       { border-color: var(--low); }
+
+    /* Expand button sits where the burger was */
+    .expand-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+    .expand-btn:hover { background: #f3f4f6; }
+
+    /* ── Overdue panel ────────────────────────────────────────────── */
+    .overdue-panel {
+      background: var(--panel);
+      border: 2px solid var(--very-high);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .overdue-panel .panel-header h2 { color: var(--very-high); }
+
+    .menu-wrap { position: relative; z-index: 30; }
+
+    .menu-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .menu {
+      position: absolute;
+      right: 0;
+      top: 44px;
+      min-width: 190px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      z-index: 50;
+      overflow: hidden;
+      display: none;
+    }
+
+    .menu.open { display: block; }
+
+    .menu button {
+      width: 100%;
+      border: 0;
+      background: white;
+      text-align: left;
+      padding: 12px 14px;
+      cursor: pointer;
+    }
+
+    .menu button:hover { background: #f9fafb; }
+
+    .done-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .done-card-wrap { position: relative; }
+
+    .done-card {
+      background: var(--done-bg);
+      border: 2px solid #cbd5e1;
+      color: var(--done-text);
+      border-radius: 18px;
+      padding: 16px;
+      min-height: 120px;
+      opacity: 0.86;
+    }
+
+    .done-card .title {
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: line-through;
+      margin-bottom: 8px;
+    }
+
+    .done-x {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-size: 80px;
+      color: rgba(100, 116, 139, 0.45);
+      font-weight: 700;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.28);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      width: min(820px, 100%);
+      background: white;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-field.full { grid-column: 1 / -1; }
+
+    .form-field input,
+    .form-field textarea,
+    .form-field select {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: white;
+    }
+
+    .form-field textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    /* ── Image thumbnail with hover popup ─────────────────────── */
+    .thumb-wrap {
+      position: relative;
+      flex: 0 0 auto;
+      display: block;
+    }
+
+    .thumb {
+      margin-top: 4px;
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      display: block;
+      cursor: zoom-in;
+    }
+
+    .thumb-popup {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 84px;
+      z-index: 200;
+      width: 260px;
+      height: 260px;
+      object-fit: contain;
+      border-radius: 16px;
+      border: 2px solid var(--line);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+      background: white;
+      pointer-events: none;
+    }
+
+    .thumb-wrap:hover .thumb-popup { display: block; }
+
+    /* ── Done cards — same as node-card but greyed ──────────────── */
+    .done-card-wrap { position: relative; }
+
+    .done-card {
+      border: 2px solid #cbd5e1;
+      border-radius: var(--radius);
+      background: var(--done-bg);
+      padding: 16px;
+      opacity: 0.72;
+      filter: grayscale(40%);
+    }
+
+    .done-card .node-title { text-decoration: line-through; color: var(--done-text); }
+
+    .pill-completed-date {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .done-x {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-size: 96px;
+      color: rgba(100, 116, 139, 0.18);
+      font-weight: 900;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }    .node-with-image {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .node-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .empty { color: var(--muted); padding: 8px 0; }
+
+    .lane-done-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #15803d;
+      margin: 14px 0 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .filter-select {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 13px;
+      background: white;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .relates-checkbox-list {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: white;
+    }
+
+    .relates-checkbox-list label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 3px 0;
+    }
+
+    .relates-checkbox-list input[type=checkbox] {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+
+    .relates-empty { color: var(--muted); font-size: 13px; padding: 4px 0; }
+
+    /* Compact button — sits left of burger in expanded cards */
+    .compact-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+    .compact-btn:hover { background: #f3f4f6; }
+
+    /* Right-side button group in node-head */
+    .node-controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+
+    /* Time estimate pill */
+    .pill-time {
+      background: #f0f9ff;
+      border-color: #7dd3fc;
+      color: #0369a1;
+      font-variant-numeric: tabular-nums;
+    }
+    .pill-time-sum {
+      background: #fef9c3;
+      border-color: #fde047;
+      color: #854d0e;
+    }
+
+    .pill-time-scheduled {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #15803d;
+    }
+
+    .pill-time-unscheduled {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
+
+    .pill-date {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .pill-date-today {
+      background: #fefce8;
+      border-color: #fde047;
+      color: #854d0e;
+      font-weight: 700;
+    }
+
+    .pill-date-overdue {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #dc2626;
+      font-weight: 700;
+    }
+
+    /* Quick add-child button at bottom of expanded card */
+    .new-child-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 12px;
+      padding: 6px 12px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .new-child-btn:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: var(--text);
+    }
+
+    /* Keyboard shortcut hint that briefly flashes on `n` press */
+    .date-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+
+    .date-text-input {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: white;
+      font: inherit;
+    }
+
+    .date-picker-hidden {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
+
+    .date-cal-btn {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .date-cal-btn:hover { background: #f3f4f6; }
+
+    /* ── Monthly calendar heatmap ──────────────────────────────── */
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .cal-nav-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cal-nav-btn:hover { background: #f3f4f6; }
+
+    .cal-month-label {
+      font-weight: 700;
+      font-size: 15px;
+      flex: 1;
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-top: 12px;
+    }
+
+    .cal-dow {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      padding-bottom: 4px;
+    }
+
+    .cal-day {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      border: 1.5px solid transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.1s;
+      user-select: none;
+      padding: 3px 2px 2px;
+      gap: 1px;
+      overflow: hidden;
+    }
+
+    .cal-day-num {
+      font-size: clamp(9px, 1.4vw, 13px);
+      font-weight: 700;
+      line-height: 1;
+      align-self: flex-start;
+      padding-left: 3px;
+      opacity: 0.7;
+    }
+
+    .cal-weather-icon {
+      font-size: clamp(16px, 3vw, 26px);
+      line-height: 1;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .cal-weather-temp {
+      font-size: clamp(8px, 1vw, 11px);
+      font-weight: 600;
+      line-height: 1;
+      opacity: 0.85;
+    }
+
+    /* Day with no weather — just show the number centred */
+    .cal-day.no-weather {
+      justify-content: center;
+    }
+    .cal-day.no-weather .cal-day-num {
+      font-size: clamp(11px, 1.6vw, 14px);
+      align-self: center;
+      padding-left: 0;
+      opacity: 1;
+    }
+
+    .cal-weather-status {
+      font-size: 10px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .cal-day:hover { transform: scale(1.18); z-index: 2; }
+    .cal-day.today { border-color: var(--text); }
+    .cal-day.empty-slot { background: transparent; cursor: default; }
+    .cal-day.empty-slot:hover { transform: none; }
+
+    /* Expanded calendar — full width below the lane row */
+    #cal-panel.cal-expanded {
+      grid-column: 1 / -1;
+    }
+    #cal-panel.cal-expanded .cal-grid {
+      grid-template-columns: repeat(7, 1fr);
+    }
+    #cal-panel.cal-expanded .cal-day-num {
+      font-size: 15px;
+      opacity: 0.8;
+    }
+    #cal-panel.cal-expanded .cal-weather-icon {
+      font-size: 32px;
+    }
+    #cal-panel.cal-expanded .cal-weather-temp {
+      font-size: 12px;
+    }
+    #cal-panel.cal-expanded .cal-day.no-weather .cal-day-num {
+      font-size: 18px;
+    }
+    #cal-panel.cal-expanded .cal-dow {
+      font-size: 13px;
+    }
+
+    .cal-tooltip {
+      position: fixed;
+      z-index: 999;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+      padding: 12px 14px;
+      min-width: 200px;
+      max-width: 300px;
+      pointer-events: none;
+      font-size: 13px;
+    }
+
+    .cal-tooltip-date {
+      font-weight: 700;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .cal-tooltip-task {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .cal-tooltip-task:last-child { border-bottom: none; }
+
+    .cal-tooltip-time {
+      margin-top: 8px;
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .peek-popup {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: auto;
+      width: min(480px, 90vw);
+      background: white;
+      border-radius: var(--radius);
+      border: 2px solid var(--medium);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+      padding: 16px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .peek-popup.visible { opacity: 1; }
+
+    .kbd-hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15,23,42,0.82);
+      color: white;
+      padding: 8px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 200;
+    }
+    .kbd-hint.show { opacity: 1; }
+
+    .save-indicator {
+      font-size: 13px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #15803d;
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+    .save-indicator.show { opacity: 1; }
+    .save-indicator.error {
+      background: #fff7ed;
+      border-color: #fdba74;
+      color: #c2410c;
+    }
+
+    @media (max-width: 980px) {
+      .lane-grid,
+      .node-body,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      .children,
+      .mini-cards,
+      .done-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>Task Tree Planner</h1>
+        <p class="subtle">Plain HTML + JS. JSON-backed. Compact/expanded hierarchy, done lane, and add-from-box workflow.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="add-root-btn">Create new Space</button>
+        <span class="save-indicator" id="save-indicator">✓ Saved</span>
+        <button class="btn" id="import-btn">Import JSON</button>
+        <button class="btn" id="export-btn">Export JSON</button>
+        <input type="file" id="file-input" accept="application/json" hidden />
+      </div>
+    </div>
+
+    <section class="overdue-panel" id="overdue-panel" style="display:none">
+      <div class="panel-header">
+        <h2>⚠ Overdue</h2>
+        <span class="count" id="overdue-count">0</span>
+      </div>
+      <div class="mini-cards" id="overdue-list"></div>
+    </section>
+
+    <div class="lane-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Tasks Today</h2>
+          <span class="count" id="today-count">0</span>
+        </div>
+        <div class="mini-cards" id="today-list"></div>
+        <div id="today-done-wrap" style="display:none">
+          <div class="lane-done-divider">✓ Done today <span class="count" id="today-done-count">0</span></div>
+          <div class="mini-cards" id="today-done-list"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Tasks Tomorrow</h2>
+          <span class="count" id="tomorrow-count">0</span>
+        </div>
+        <div class="mini-cards" id="tomorrow-list"></div>
+        <div id="tomorrow-done-wrap" style="display:none">
+          <div class="lane-done-divider">✓ Done tomorrow <span class="count" id="tomorrow-done-count">0</span></div>
+          <div class="mini-cards" id="tomorrow-done-list"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="cal-panel">
+        <div class="panel-header">
+          <h2>Schedule</h2>
+          <div class="cal-nav">
+            <button class="cal-nav-btn" id="cal-prev">‹</button>
+            <span class="cal-month-label" id="cal-month-label"></span>
+            <button class="cal-nav-btn" id="cal-next">›</button>
+            <button class="cal-nav-btn" id="cal-expand" title="Expand calendar">⤢</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </section>
+    </div>
+    <div id="cal-tooltip" class="cal-tooltip" style="display:none"></div>
+
+    <section class="panel" style="margin-bottom:18px;">
+      <div class="panel-header">
+        <h2>Filter</h2>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <select id="filter-status" class="filter-select">
+            <option value="">— All statuses —</option>
+            <option value="open">Open</option>
+            <option value="in_progress" selected>In progress</option>
+            <option value="blocked">Blocked</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="filter-priority" class="filter-select">
+            <option value="">— All priorities —</option>
+            <option value="very_high">Very high</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <span class="count" id="filter-count">0</span>
+        </div>
+      </div>
+      <div class="mini-cards" id="filter-list"></div>
+    </section>
+
+    <section class="panel tree-wrap">
+      <div class="panel-header">
+        <h2>Main Tree</h2>
+        <div class="legend">Very high = red, high = orange, medium = green, low = gray</div>
+      </div>
+      <div class="roots" id="roots"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Tasks Done</h2>
+        <span class="count" id="done-count">0</span>
+      </div>
+      <div class="done-grid" id="done-list"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <h2 id="modal-title">Add Item</h2>
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>Name</label>
+          <input id="form-name" type="text" placeholder="Item name" />
+        </div>
+        <div class="form-field full">
+          <label>Description</label>
+          <textarea id="form-description" placeholder="Short description"></textarea>
+        </div>
+        <div class="form-field full">
+          <label>Relates to</label>
+          <div id="form-relates-wrap" class="relates-checkbox-list"></div>
+        </div>
+        <div class="form-field">
+          <label>Priority</label>
+          <select id="form-priority">
+            <option value="very_high">very_high</option>
+            <option value="high">high</option>
+            <option value="medium" selected>medium</option>
+            <option value="low">low</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Status</label>
+          <select id="form-status">
+            <option value="open" selected>open</option>
+            <option value="in_progress">in_progress</option>
+            <option value="blocked">blocked</option>
+            <option value="done">done</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Target date</label>
+          <div class="date-input-wrap">
+            <input id="form-target-date" type="text" placeholder="dd/mm/yyyy" maxlength="10" class="date-text-input" />
+            <input id="form-target-date-picker" type="date" class="date-picker-hidden" tabindex="-1" aria-hidden="true" />
+            <button type="button" id="form-date-picker-btn" class="date-cal-btn" title="Open calendar">📅</button>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Time estimate (hours)</label>
+          <input id="form-time" type="number" min="0" step="0.25" placeholder="e.g. 2.5" />
+          <div class="subtle">Leave blank for parent nodes — time is summed from children.</div>
+        </div>
+        <div class="form-field">
+          <label>Image filename</label>
+          <input id="form-image-file" type="file" accept="image/*" />
+          <input id="form-image" type="text" placeholder="images/example.png" />
+          <div id="form-image-preview" class="subtle">Select an image — it will be uploaded to images/ on the server automatically.</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="modal-cancel">Cancel</button>
+        <button class="btn primary" id="modal-add">Save</button>
+      </div>
+    </div>
+  </div>
+  <div class="kbd-hint" id="kbd-hint"></div>
+  <script>
+    const typeChildren = {
+      space: 'project',
+      project: 'task',
+      task: 'subtask',
+      subtask: 'subtask'
+    };
+
+    const typeLabels = {
+      space: 'Space',
+      project: 'Project',
+      task: 'Task',
+      subtask: 'Subtask'
+    };
+
+    const emptyData = {
+      version: 1,
+      settings: { images_dir: 'images/', root_ids: [] },
+      nodes: {}
+    };
+
+    // ── Save indicator ───────────────────────────────────────────────────────
+    function showSaveIndicator(ok) {
+      const el = document.getElementById('save-indicator');
+      el.textContent = ok ? '✓ Saved' : '⚠ Save failed';
+      el.className = 'save-indicator show' + (ok ? '' : ' error');
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove('show'), ok ? 1600 : 3500);
+    }
+
+    // ── Server persistence ───────────────────────────────────────────────────
+    const IS_HTTP = location.protocol === 'http:' || location.protocol === 'https:';
+
+    async function serverSave() {
+      if (!IS_HTTP) return;
+      try {
+        const resp = await fetch('/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        showSaveIndicator(resp.ok);
+      } catch {
+        showSaveIndicator(false);
+      }
+    }
+
+    async function serverUploadImage(file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch('/upload-image', { method: 'POST', body: fd });
+      if (!resp.ok) throw new Error('Upload failed');
+      const json = await resp.json();
+      return json.path; // e.g. "images/foo.png"
+    }
+
+    // ── State helpers ────────────────────────────────────────────────────────
+    function saveState() {
+      if (IS_HTTP) {
+        serverSave(); // async, fire-and-forget
+      } else {
+        localStorage.setItem('task-tree-planner-data', JSON.stringify(data));
+      }
+    }
+
+    function loadStateLocal() {
+      try { return JSON.parse(localStorage.getItem('task-tree-planner-data')); }
+      catch { return null; }
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    // HTTP: data.json is the sole source of truth (no localStorage fallback).
+    // file://: localStorage, then blank.
+    async function initData() {
+      if (IS_HTTP) {
+        try {
+          const resp = await fetch('data.json');
+          if (resp.ok) {
+            const parsed = await resp.json();
+            if (parsed?.nodes && parsed?.settings?.root_ids) {
+              data = parsed;
+              migrateData();
+              render();
+              return;
+            }
+          }
+        } catch (_) {}
+        data = structuredClone(emptyData);
+        render();
+        return;
+      }
+      const stored = loadStateLocal();
+      data = stored || structuredClone(emptyData);
+      migrateData();
+      render();
+    }
+
+    let data = structuredClone(emptyData);
+    let addState = { open: false, anchorId: null, mode: 'child', editId: null };
+    let openMenuId = null;
+    let hoveredNodeId = null;
+    let weatherByDate = {};   // iso → { emoji, label, temp_max, temp_min, precip, isHistory }
+    const calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+    // ── Weather ───────────────────────────────────────────────────────────────
+    async function initWeather() {
+      if (!IS_HTTP) return;
+      try {
+        const pos = await new Promise((res, rej) => {
+          if (!navigator.geolocation) { rej(new Error('no geolocation')); return; }
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 });
+        });
+        await fetchWeather(pos.coords.latitude, pos.coords.longitude);
+      } catch {
+        // Browser denied or unavailable — fall back to server IP geolocation
+        try {
+          const geo = await fetch('/geolocate').then(r => r.json());
+          if (geo.ok) await fetchWeather(geo.lat, geo.lon);
+        } catch (e) {
+          console.warn('Weather unavailable:', e);
+        }
+      }
+    }
+
+    async function fetchWeather(lat, lon) {
+      const resp = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+      if (!resp.ok) return;
+      const json = await resp.json();
+      if (!json.ok) return;
+
+      weatherByDate = {};
+      // Merge history first (older data), then forecast on top
+      const today = dateKey(0);
+      Object.entries(json.history || {}).forEach(([date, w]) => {
+        weatherByDate[date] = { ...w, isHistory: true };
+      });
+      (json.forecast || []).forEach(w => {
+        weatherByDate[w.date] = {
+          emoji: w.emoji, label: w.label,
+          temp_max: w.temp_max, temp_min: w.temp_min,
+          precip: w.precip,
+          isHistory: w.date < today,
+        };
+      });
+      renderCalendar();
+    }
+
+    // ── Peek popup — appended directly to <body> so no ancestor affects fixed positioning ──
+    let peekDismissTimer = null;
+    let kbdHintTimer = null;
+
+    function showKbdHint(msg) {
+      const el = document.getElementById('kbd-hint');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(kbdHintTimer);
+      kbdHintTimer = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    function getPeekPopup() {
+      let el = document.getElementById('peek-popup');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'peek-popup';
+        el.className = 'peek-popup';
+        el.style.position = 'fixed';
+        // Hovering the popup itself cancels auto-dismiss
+        el.addEventListener('mouseenter', () => clearTimeout(peekDismissTimer));
+        el.addEventListener('mouseleave', () => schedulePeekDismiss());
+        document.body.appendChild(el);
+      }
+      return el;
+    }
+
+    function schedulePeekDismiss(ms = 1000) {
+      clearTimeout(peekDismissTimer);
+      peekDismissTimer = setTimeout(hidePeekPopup, ms);
+    }
+
+    function showPeekPopup(node, mouseX, mouseY) {
+      const popup = getPeekPopup();
+
+      // Build content
+      popup.innerHTML = renderNodeCardContent(node);
+
+      // Add burger menu in the node-head (peek-specific, no full render on toggle)
+      const head = popup.querySelector('.node-head');
+      if (head) {
+        head.appendChild(createPeekMenu(node));
+      }
+
+      popup.classList.add('visible');
+
+      // Position near cursor, stay within viewport
+      const pw = 480;
+      const ph = 240;
+      const margin = 12;
+      let left = mouseX + 16;
+      let top  = mouseY + 16;
+      if (left + pw > window.innerWidth  - margin) left = mouseX - pw - 16;
+      if (top  + ph > window.innerHeight - margin) top  = mouseY - ph - 16;
+      popup.style.left = Math.max(margin, left) + 'px';
+      popup.style.top  = Math.max(margin, top)  + 'px';
+
+      clearTimeout(peekDismissTimer);
+    }
+
+    function hidePeekPopup() {
+      const el = document.getElementById('peek-popup');
+      if (el) el.classList.remove('visible');
+    }
+
+    const rootsEl = document.getElementById('roots');
+    const todayListEl = document.getElementById('today-list');
+    const tomorrowListEl = document.getElementById('tomorrow-list');
+    const todayDoneListEl = document.getElementById('today-done-list');
+    const todayDoneWrapEl = document.getElementById('today-done-wrap');
+    const todayDoneCountEl = document.getElementById('today-done-count');
+    const tomorrowDoneListEl = document.getElementById('tomorrow-done-list');
+    const tomorrowDoneWrapEl = document.getElementById('tomorrow-done-wrap');
+    const tomorrowDoneCountEl = document.getElementById('tomorrow-done-count');
+    const overdueListEl = document.getElementById('overdue-list');
+    const overduePanelEl = document.getElementById('overdue-panel');
+    const doneListEl = document.getElementById('done-list');
+    const todayCountEl = document.getElementById('today-count');
+    const tomorrowCountEl = document.getElementById('tomorrow-count');
+    const overdueCountEl = document.getElementById('overdue-count');
+    const doneCountEl = document.getElementById('done-count');
+    const filterListEl = document.getElementById('filter-list');
+    const filterCountEl = document.getElementById('filter-count');
+
+    function migrateData() {
+      Object.values(data.nodes || {}).forEach(node => {
+        if (Array.isArray(node.depends_on) && !Array.isArray(node.relates_to)) {
+          node.relates_to = [...node.depends_on];
+          delete node.depends_on;
+        }
+        if (!Array.isArray(node.relates_to)) node.relates_to = [];
+        if (node.time_estimate === undefined) node.time_estimate = null;
+        if (node.completed_date === undefined) node.completed_date = null;
+      });
+    }
+
+    function makeId(type) {
+      let idx = 1;
+      while (data.nodes[`${type}_${idx}`]) idx += 1;
+      return `${type}_${idx}`;
+    }
+
+    function formatDate(date) {
+      if (!date) return '—';
+      const d = new Date(date + 'T12:00:00'); // avoid timezone shifting
+      if (Number.isNaN(d.getTime())) return date;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    function getOpenNodes() {
+      return Object.values(data.nodes).filter(node => !node.archived && node.status !== 'done');
+    }
+
+    function getDoneNodes() {
+      return Object.values(data.nodes).filter(node => !node.archived && node.status === 'done');
+    }
+
+    function dateKey(offsetDays = 0) {
+      const d = new Date();
+      d.setHours(12, 0, 0, 0);
+      d.setDate(d.getDate() + offsetDays);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // Encode each path segment so spaces and special chars work in src=
+    function imageUrl(path) {
+      return path.split('/').map(encodeURIComponent).join('/');
+    }
+
+    function nodeImageHtml(node) {
+      if (!node.image) return '';
+      const src = imageUrl(node.image);
+      const alt = escapeHtml(node.image);
+      return `<div class="thumb-wrap">
+        <img src="${src}" alt="${alt}" class="thumb" />
+        <img src="${src}" alt="" class="thumb-popup" />
+      </div>`;
+    }
+
+    // Returns combined outgoing + incoming relation names for display
+    function getRelationsText(node) {
+      const outgoing = (node.relates_to || [])
+        .map(id => data.nodes[id]?.name).filter(Boolean);
+      const incoming = Object.values(data.nodes)
+        .filter(n => n.id !== node.id && (n.relates_to || []).includes(node.id))
+        .map(n => n.name);
+      const all = [...new Set([...outgoing, ...incoming])];
+      return all.length ? all.join(', ') : '—';
+    }
+
+    // Recursively sum time from children; use node's own estimate if no children or all children are 0
+    function calcTime(node) {
+      const visibleChildren = (node.children || [])
+        .map(id => data.nodes[id])
+        .filter(Boolean)
+        .filter(c => !c.archived);
+      if (visibleChildren.length) {
+        const sum = visibleChildren.reduce((acc, c) => acc + calcTime(c), 0);
+        return sum;
+      }
+      return node.time_estimate || 0;
+    }
+
+    function formatTime(hours) {
+      if (!hours) return null;
+      if (hours < 1) return `${Math.round(hours * 60)}m`;
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      return m ? `${h}h ${m}m` : `${h}h`;
+    }
+
+    function timePillHtml(node) {
+      const hasOwnChildren = (node.children || []).length > 0;
+      const t = calcTime(node);
+      if (!t) return '';
+      const label = formatTime(t);
+      let cls, title;
+      if (hasOwnChildren) {
+        cls = 'pill pill-time-sum';
+        title = 'Sum of children';
+      } else if (node.target_date) {
+        cls = 'pill pill-time-scheduled';
+        title = 'Scheduled';
+      } else {
+        cls = 'pill pill-time-unscheduled';
+        title = 'Not scheduled';
+      }
+      return `<span class="${cls}" title="${title}">⏱ ${escapeHtml(label)}</span>`;
+    }
+
+    // Only shown on leaf nodes (no children) — parents' scheduling is implicit
+    function schedulePillHtml(node) {
+      return '';
+    }
+
+    function datePillHtml(node) {
+      if (!node.target_date) return '';
+      const d = new Date(node.target_date + 'T12:00:00');
+      if (isNaN(d)) return '';
+      const day = d.getDate();
+      const mon = d.toLocaleDateString(undefined, { month: 'short' });
+      const today = dateKey(0);
+      const isOverdue = node.target_date < today;
+      const isToday   = node.target_date === today;
+      const cls = isOverdue ? 'pill pill-date-overdue' : isToday ? 'pill pill-date-today' : 'pill pill-date';
+      return `<span class="${cls}" title="Target date">📅 ${day}. ${escapeHtml(mon)}</span>`;
+    }
+
+    function renderNodeCardContent(node) {
+      return `
+        <div class="node-with-image">
+          ${nodeImageHtml(node)}
+          <div class="node-main">
+            <div class="node-head">
+              <div class="node-head-left">
+                <div class="node-name-row">
+                  <span class="priority-dot dot-${node.priority || 'low'}"></span>
+                  <div class="node-title">${escapeHtml(node.name)}</div>
+                </div>
+                <div class="node-pills-row">
+                  <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
+                  <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+                  ${timePillHtml(node)}
+                  ${datePillHtml(node)}
+                </div>
+              </div>
+            </div>
+            <div class="node-body">
+              <div>
+                <div class="label">Description</div>
+                <div class="value">${escapeHtml(node.description || '—')}</div>
+              </div>
+              <div>
+                <div class="label">Target</div>
+                <div class="value">${escapeHtml(formatDate(node.target_date))}</div>
+                <div class="label" style="margin-top:8px;">Relations</div>
+                <div class="value">${escapeHtml(getRelationsText(node))}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function miniCard(node) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'node-wrap';
+      const card = document.createElement('div');
+      card.className = `node-card priority-${node.priority || 'low'}`;
+      card.innerHTML = renderNodeCardContent(node);
+      const head = card.querySelector('.node-head');
+      head.appendChild(createMenu(node, { doneSection: false, allowAddChild: false, allowEdit: true, allowDelete: false }));
+      wrapper.appendChild(card);
+      return wrapper;
+    }
+
+    function miniCardDone(node) {
+      const wrap = document.createElement('div');
+      wrap.className = 'done-card-wrap';
+      const xEl = document.createElement('div');
+      xEl.className = 'done-x';
+      xEl.textContent = '×';
+      wrap.appendChild(xEl);
+      const card = document.createElement('div');
+      card.className = `done-card node-card priority-${node.priority || 'low'}`;
+      card.innerHTML = renderNodeCardContent(node);
+      if (node.completed_date) {
+        const pillsRow = card.querySelector('.node-pills-row');
+        if (pillsRow) {
+          const badge = document.createElement('span');
+          badge.className = 'pill pill-completed-date';
+          badge.title = 'Completed on';
+          badge.textContent = `✓ ${formatDate(node.completed_date)}`;
+          pillsRow.appendChild(badge);
+        }
+      }
+      const head = card.querySelector('.node-head');
+      head.appendChild(createMenu(node, { doneSection: true, allowAddChild: false, allowEdit: true, allowDelete: true }));
+      wrap.appendChild(card);
+      return wrap;
+    }
+
+    function renderLanes() {
+      const openNodes = getOpenNodes();
+      const allNodes = Object.values(data.nodes).filter(n => !n.archived);
+      const today = dateKey(0);
+      const tomorrow = dateKey(1);
+      const overdueItems  = openNodes.filter(node => node.target_date && node.target_date < today);
+      const todayItems    = openNodes.filter(node => node.target_date === today);
+      const tomorrowItems = openNodes.filter(node => node.target_date === tomorrow);
+
+      // Completed today / tomorrow (by completed_date)
+      const doneTodayItems    = allNodes.filter(n => n.status === 'done' && n.completed_date === today);
+      const doneTomorrowItems = allNodes.filter(n => n.status === 'done' && n.completed_date === tomorrow);
+
+      // Overdue panel
+      overdueListEl.innerHTML = '';
+      overdueCountEl.textContent = String(overdueItems.length);
+      overduePanelEl.style.display = overdueItems.length ? '' : 'none';
+      overdueItems.forEach(node => overdueListEl.appendChild(miniCard(node)));
+
+      // Today
+      todayListEl.innerHTML = '';
+      todayCountEl.textContent = String(todayItems.length);
+      if (!todayItems.length) todayListEl.innerHTML = '<div class="empty">No tasks scheduled for today.</div>';
+      else todayItems.forEach(node => todayListEl.appendChild(miniCard(node)));
+
+      todayDoneListEl.innerHTML = '';
+      todayDoneCountEl.textContent = String(doneTodayItems.length);
+      todayDoneWrapEl.style.display = doneTodayItems.length ? '' : 'none';
+      doneTodayItems.forEach(node => todayDoneListEl.appendChild(miniCardDone(node)));
+
+      // Tomorrow
+      tomorrowListEl.innerHTML = '';
+      tomorrowCountEl.textContent = String(tomorrowItems.length);
+      if (!tomorrowItems.length) tomorrowListEl.innerHTML = '<div class="empty">No tasks scheduled for tomorrow.</div>';
+      else tomorrowItems.forEach(node => tomorrowListEl.appendChild(miniCard(node)));
+
+      tomorrowDoneListEl.innerHTML = '';
+      tomorrowDoneCountEl.textContent = String(doneTomorrowItems.length);
+      tomorrowDoneWrapEl.style.display = doneTomorrowItems.length ? '' : 'none';
+      doneTomorrowItems.forEach(node => tomorrowDoneListEl.appendChild(miniCardDone(node)));
+    }
+
+    function renderDone() {
+      const doneNodes = getDoneNodes();
+      doneListEl.innerHTML = '';
+      doneCountEl.textContent = String(doneNodes.length);
+
+      if (!doneNodes.length) {
+        doneListEl.innerHTML = '<div class="empty">Nothing completed yet.</div>';
+        return;
+      }
+
+      doneNodes.forEach(node => {
+        const wrap = document.createElement('div');
+        wrap.className = 'done-card-wrap';
+
+        // X watermark
+        const xEl = document.createElement('div');
+        xEl.className = 'done-x';
+        xEl.textContent = '×';
+        wrap.appendChild(xEl);
+
+        // Reuse the standard card content, just apply done-card class for greying
+        const card = document.createElement('div');
+        card.className = `done-card node-card priority-${node.priority || 'low'}`;
+        card.innerHTML = renderNodeCardContent(node);
+
+        // Completion date badge
+        if (node.completed_date) {
+          const pillsRow = card.querySelector('.node-pills-row');
+          if (pillsRow) {
+            const badge = document.createElement('span');
+            badge.className = 'pill pill-completed-date';
+            badge.title = 'Completed on';
+            badge.textContent = `✓ ${formatDate(node.completed_date)}`;
+            pillsRow.appendChild(badge);
+          }
+        }
+
+        // Burger menu (edit / delete only, no add-child, no complete)
+        const head = card.querySelector('.node-head');
+        head.appendChild(createMenu(node, { doneSection: true, allowAddChild: false, allowEdit: true, allowDelete: true }));
+
+        wrap.appendChild(card);
+        doneListEl.appendChild(wrap);
+      });
+    }
+
+    // Menu for inside the peek popup — toggles open class directly, no full render()
+    function createPeekMenu(node) {
+      const wrap = document.createElement('div');
+      wrap.className = 'menu-wrap';
+      wrap.style.position = 'relative';
+
+      const btn = document.createElement('button');
+      btn.className = 'menu-btn';
+      btn.type = 'button';
+      btn.textContent = '☰';
+
+      const menu = document.createElement('div');
+      menu.className = 'menu';
+      menu.style.zIndex = '10000';
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = menu.classList.contains('open');
+        menu.classList.toggle('open', !isOpen);
+      });
+
+      if (node.status !== 'done') {
+        const completeBtn = document.createElement('button');
+        completeBtn.textContent = 'Complete';
+        completeBtn.addEventListener('click', () => {
+          if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
+          data.nodes[node.id].status = 'done';
+          data.nodes[node.id].collapsed = true;
+          data.nodes[node.id].completed_date = dateKey(0);
+          openMenuId = null;
+          hidePeekPopup();
+          saveState();
+          render();
+        });
+        menu.appendChild(completeBtn);
+      }
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => { hidePeekPopup(); openEditDialog(node.id); });
+      menu.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', () => { hidePeekPopup(); deleteNodeWithChildren(node.id); });
+      menu.appendChild(deleteBtn);
+
+      wrap.appendChild(btn);
+      wrap.appendChild(menu);
+      return wrap;
+    }
+
+    function createMenu(node, options = {}) {
+      const { doneSection = false, allowAddChild = true, allowEdit = true, allowDelete = true } = options;
+      const wrap = document.createElement('div');
+      wrap.className = 'menu-wrap';
+
+      const btn = document.createElement('button');
+      btn.className = 'menu-btn';
+      btn.type = 'button';
+      btn.textContent = '☰';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMenuId = openMenuId === node.id ? null : node.id;
+        render();
+      });
+
+      const menu = document.createElement('div');
+      menu.className = 'menu' + (openMenuId === node.id ? ' open' : '');
+
+      if (!doneSection && node.status !== 'done') {
+        const completeBtn = document.createElement('button');
+        completeBtn.textContent = 'Complete';
+        completeBtn.addEventListener('click', () => {
+          if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
+          data.nodes[node.id].status = 'done';
+          data.nodes[node.id].collapsed = true;
+          data.nodes[node.id].completed_date = dateKey(0);
+          openMenuId = null;
+          saveState();
+          render();
+        });
+        menu.appendChild(completeBtn);
+      }
+
+      if (allowEdit) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', () => openEditDialog(node.id));
+        menu.appendChild(editBtn);
+      }
+
+      if (allowAddChild) {
+        const addChildBtn = document.createElement('button');
+        addChildBtn.textContent = `New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
+        addChildBtn.addEventListener('click', () => openAddDialog(node.id, 'child'));
+        menu.appendChild(addChildBtn);
+      }
+
+      if (allowDelete) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', () => deleteNodeWithChildren(node.id));
+        menu.appendChild(deleteBtn);
+      }
+
+      wrap.appendChild(btn);
+      wrap.appendChild(menu);
+      return wrap;
+    }
+
+    // Recursively render a node and its children in compact rectangle-in-rectangle form
+    function renderCompactChildren(node, depth) {
+      const visibleChildren = (node.children || [])
+        .map(id => data.nodes[id])
+        .filter(Boolean)
+        .filter(c => !c.archived && c.status !== 'done');
+
+      if (!visibleChildren.length) return null;
+
+      const grid = document.createElement('div');
+      grid.className = depth === 0 ? 'compact-children' : 'compact-grandchildren';
+
+      visibleChildren.forEach(child => {
+        const card = document.createElement('div');
+        card.className = (depth === 0 ? 'compact-child-card' : 'compact-grandchild-card')
+          + ` priority-${child.priority || 'low'}`;
+        card.style.cursor = 'default';
+
+        // Click to peek on each child card
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showPeekPopup(child, e.clientX, e.clientY);
+        });
+
+        const nameEl = document.createElement('div');
+        nameEl.className = depth === 0 ? 'compact-child-name' : '';
+        nameEl.style.fontWeight = '700';
+        nameEl.style.marginBottom = '4px';
+        nameEl.textContent = child.name;
+        card.appendChild(nameEl);
+
+        if (depth === 0) {
+          const pills = document.createElement('div');
+          pills.className = 'compact-child-pills';
+          const t = calcTime(child);
+          const timePill = t ? `<span class="pill ${(child.children||[]).length ? 'pill-time-sum' : (child.target_date ? 'pill-time-scheduled' : 'pill-time-unscheduled')}" title="Time">⏱ ${escapeHtml(formatTime(t))}</span>` : '';
+          const datePill = datePillHtml(child);
+          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${timePill}${datePill}`;
+          card.appendChild(pills);
+        } else {
+          // grandchild: show time + date inline if available
+          const t = calcTime(child);
+          if (t) {
+            const tp = document.createElement('span');
+            tp.className = `pill ${child.target_date ? 'pill-time-scheduled' : 'pill-time-unscheduled'}`;
+            tp.style.fontSize = '11px';
+            tp.textContent = `⏱ ${formatTime(t)}`;
+            card.appendChild(tp);
+          }
+          const dp = datePillHtml(child);
+          if (dp) {
+            const span = document.createElement('span');
+            span.innerHTML = dp;
+            span.style.fontSize = '11px';
+            card.appendChild(span.firstChild);
+          }
+        }
+
+        // One more level deep
+        const grandchildren = renderCompactChildren(child, depth + 1);
+        if (grandchildren) card.appendChild(grandchildren);
+
+        grid.appendChild(card);
+      });
+
+      return grid;
+    }
+
+    function makeCompactBtn(node) {
+      const btn = document.createElement('button');
+      btn.className = 'compact-btn';
+      btn.type = 'button';
+      btn.title = 'Compact';
+      // Inward arrows: top-right → center, bottom-left → center  (/ diagonal)
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2L10 6M10 3V6H13"/>
+        <path d="M2 14L6 10M6 13V10H3"/>
+      </svg>`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        data.nodes[node.id].collapsed = true;
+        openMenuId = null;
+        saveState();
+        render();
+      });
+      return btn;
+    }
+
+    function makeNewChildBtn(node) {
+      const childType = typeChildren[node.type];
+      if (!childType) return null;
+      const label = typeLabels[childType] || childType;
+      const btn = document.createElement('button');
+      btn.className = 'new-child-btn';
+      btn.type = 'button';
+      btn.dataset.nodeId = node.id;
+      btn.textContent = `+ New ${label}`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAddDialog(node.id, 'child');
+      });
+      return btn;
+    }
+
+    function renderNode(node) {
+      const wrap = document.createElement('div');
+      wrap.className = 'node-wrap';
+
+      // Click to peek on collapsed nodes; track hover for keyboard shortcut
+      wrap.addEventListener('mouseenter', () => { hoveredNodeId = node.id; });
+      wrap.addEventListener('mouseleave', () => { if (hoveredNodeId === node.id) hoveredNodeId = null; });
+      if (node.collapsed) {
+        wrap.addEventListener('click', (e) => {
+          // Don't trigger if clicking a button inside
+          if (e.target.closest('button')) return;
+          showPeekPopup(node, e.clientX, e.clientY);
+        });
+      }
+
+      const card = document.createElement('div');
+
+      if (node.collapsed) {
+        // ── Compact mode ──
+        card.className = `node-card is-compact priority-${node.priority || 'low'}`;
+
+        const head = document.createElement('div');
+        head.className = 'node-head';
+        head.style.marginBottom = '0';
+
+        const headLeft = document.createElement('div');
+        headLeft.className = 'node-head-left';
+
+        const nameRow = document.createElement('div');
+        nameRow.className = 'node-name-row';
+        nameRow.innerHTML = `<span class="priority-dot dot-${node.priority || 'low'}"></span><div class="node-title">${escapeHtml(node.name)}</div>`;
+        headLeft.appendChild(nameRow);
+
+        const pillsRow = document.createElement('div');
+        pillsRow.className = 'node-pills-row';
+        pillsRow.innerHTML = `
+          <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
+          <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+          ${timePillHtml(node)}
+          ${datePillHtml(node)}
+        `;
+        headLeft.appendChild(pillsRow);
+        head.appendChild(headLeft);
+
+        // Expand button (replaces burger when compact)
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'expand-btn';
+        expandBtn.type = 'button';
+        expandBtn.title = 'Expand';
+        // Outward arrows: center → top-left, center → bottom-right  (\ diagonal)
+        expandBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 6L2 2M2 5V2H5"/>
+          <path d="M10 10L14 14M14 11V14H11"/>
+        </svg>`;
+        expandBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          data.nodes[node.id].collapsed = false;
+          saveState();
+          render();
+        });
+        head.appendChild(expandBtn);
+        card.appendChild(head);
+
+        const childrenEl = renderCompactChildren(node, 0);
+        if (childrenEl) card.appendChild(childrenEl);
+
+      } else {
+        // ── Expanded mode ──
+        card.className = `node-card priority-${node.priority || 'low'}`;
+        card.innerHTML = renderNodeCardContent(node);
+
+        const head = card.querySelector('.node-head');
+        // Controls: [compact-btn] [burger-menu]
+        const controls = document.createElement('div');
+        controls.className = 'node-controls';
+        controls.appendChild(makeCompactBtn(node));
+        controls.appendChild(createMenu(node, { doneSection: false, allowAddChild: false, allowEdit: true, allowDelete: true }));
+        head.appendChild(controls);
+
+        // New child button at bottom of card content
+        const newChildBtn = makeNewChildBtn(node);
+        if (newChildBtn) card.appendChild(newChildBtn);
+      }
+
+      wrap.appendChild(card);
+
+      if (!node.collapsed) {
+        const visibleChildren = (node.children || [])
+          .map(id => data.nodes[id])
+          .filter(Boolean)
+          .filter(child => !child.archived && child.status !== 'done');
+
+        if (visibleChildren.length) {
+          const childrenEl = document.createElement('div');
+          childrenEl.className = 'children';
+          visibleChildren.forEach(child => childrenEl.appendChild(renderNode(child)));
+          wrap.appendChild(childrenEl);
+        }
+      }
+
+      return wrap;
+    }
+
+    function renderRoots() {
+      rootsEl.innerHTML = '';
+      (data.settings.root_ids || []).forEach(id => {
+        const node = data.nodes[id];
+        if (!node || node.archived || node.status === 'done') return;
+        rootsEl.appendChild(renderNode(node));
+      });
+    }
+
+    // ── Calendar heatmap ────────────────────────────────────────────────────
+    function dayColor(totalHours) {
+      if (!totalHours)       return '#f8fafc'; // 0h   — near-white, neutral
+      if (totalHours <= 2)   return '#dcfce7'; // 1–2h — very light green
+      if (totalHours <= 5)   return '#cffafe'; // 2–5h — very light cyan
+      if (totalHours <= 8)   return '#fed7aa'; // 5–8h — light orange
+      if (totalHours <= 10)  return '#fca5a5'; // 8–10h — light red
+      if (totalHours <= 12)  return '#f87171'; // 10–12h — medium red
+      return '#ef4444';                         // 12+h  — red
+    }
+
+    function doneColor(totalHours) {
+      if (!totalHours)       return '#f8fafc'; // 0h   — neutral
+      if (totalHours <= 2)   return '#dcfce7'; // 1–2h — light green
+      if (totalHours <= 5)   return '#86efac'; // 2–5h — green
+      if (totalHours <= 8)   return '#4ade80'; // 5–8h — medium green
+      if (totalHours <= 10)  return '#22c55e'; // 8–10h — strong green
+      if (totalHours <= 12)  return '#16a34a'; // 10–12h — dark green
+      return '#14532d';                         // 12+h  — very dark green
+    }
+
+    function renderCalendar() {
+      const { year, month } = calState;
+      const grid = document.getElementById('cal-grid');
+      const label = document.getElementById('cal-month-label');
+      grid.innerHTML = '';
+
+      label.textContent = new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+      // Build a map: dateKey → [open nodes scheduled] and [completed nodes]
+      const nodesByDay = {};
+      const completedByDay = {};
+      Object.values(data.nodes).forEach(node => {
+        if (node.archived) return;
+        // Scheduled (open/future) nodes by target_date
+        if (node.target_date && node.status !== 'done') {
+          const d = new Date(node.target_date + 'T12:00:00');
+          if (d.getFullYear() === year && d.getMonth() === month) {
+            if (!nodesByDay[node.target_date]) nodesByDay[node.target_date] = [];
+            nodesByDay[node.target_date].push(node);
+          }
+        }
+        // Completed nodes by completed_date
+        if (node.completed_date && node.status === 'done') {
+          const d = new Date(node.completed_date + 'T12:00:00');
+          if (d.getFullYear() === year && d.getMonth() === month) {
+            if (!completedByDay[node.completed_date]) completedByDay[node.completed_date] = [];
+            completedByDay[node.completed_date].push(node);
+          }
+        }
+      });
+
+      // Day-of-week headers
+      ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'cal-dow';
+        el.textContent = d;
+        grid.appendChild(el);
+      });
+
+      const firstDay = new Date(year, month, 1);
+      // Monday-based: Sun=6, Mon=0 … Sat=5
+      let startOffset = (firstDay.getDay() + 6) % 7;
+      for (let i = 0; i < startOffset; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'cal-day empty-slot';
+        grid.appendChild(blank);
+      }
+
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayKey = dateKey(0);
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const nodes = nodesByDay[iso] || [];
+        const doneNodes = completedByDay[iso] || [];
+        const totalHours = nodes.reduce((acc, n) => acc + (n.time_estimate || calcTime(n) || 0), 0);
+        const doneHours = doneNodes.reduce((acc, n) => acc + (n.time_estimate || calcTime(n) || 0), 0);
+        const wx = weatherByDate[iso];
+
+        // Past days: colour by completed work (green). Future/today: colour by scheduled load (orange/red)
+        const isPast = iso < todayKey;
+        const bgColor = isPast ? doneColor(doneHours) : dayColor(nodes.length ? totalHours : 0);
+        const textDark = (isPast ? doneHours : totalHours) >= 6;
+
+        const el = document.createElement('div');
+        el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather');
+        el.style.background = bgColor;
+        el.style.color = textDark ? 'white' : '#1e293b';
+
+        // Day number — top-left corner when weather shown, centred otherwise
+        const numEl = document.createElement('div');
+        numEl.className = 'cal-day-num';
+        numEl.textContent = day;
+        el.appendChild(numEl);
+
+        // Weather icon (centre) + temp (bottom)
+        if (wx) {
+          const iconEl = document.createElement('div');
+          iconEl.className = 'cal-weather-icon';
+          iconEl.textContent = wx.emoji;
+          el.appendChild(iconEl);
+          if (wx.temp_max !== null && wx.temp_min !== null) {
+            const tempEl = document.createElement('div');
+            tempEl.className = 'cal-weather-temp';
+            tempEl.textContent = `${Math.round(wx.temp_max)}/${Math.round(wx.temp_min)}°`;
+            el.appendChild(tempEl);
+          }
+          if (wx.isHistory) el.style.opacity = '0.75';
+        }
+
+        // Tooltip on hover
+        el.addEventListener('mouseenter', (e) => {
+          const tip = document.getElementById('cal-tooltip');
+          const hasContent = nodes.length || doneNodes.length || wx;
+          if (!hasContent) { tip.style.display = 'none'; return; }
+
+          const dateLabel = new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+          let html = `<div class="cal-tooltip-date">${dateLabel}`;
+          if (wx) html += ` <span class="cal-weather-status">${wx.emoji} ${escapeHtml(wx.label)}</span>`;
+          html += '</div>';
+
+          if (wx && wx.temp_max !== null) {
+            html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">`;
+            html += `🌡️ ${wx.temp_max}°/${wx.temp_min}°C`;
+            if (wx.precip) html += `  🌧️ ${wx.precip}mm`;
+            if (wx.isHistory) html += `  <span style="opacity:0.6">(recorded)</span>`;
+            html += `</div>`;
+          }
+
+          // Past: show completed tasks in green; future/today: show scheduled tasks
+          if (isPast && doneNodes.length) {
+            html += `<div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:4px;">✓ Completed</div>`;
+            html += doneNodes.map(n => {
+              const t = n.time_estimate || calcTime(n);
+              const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
+            }).join('');
+            if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
+          }
+
+          if (nodes.length) {
+            if (isPast) html += `<div style="font-size:11px;font-weight:700;color:var(--muted);margin:6px 0 4px;">📌 Still open</div>`;
+            html += nodes.map(n => {
+              const t = n.time_estimate || calcTime(n);
+              const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
+            }).join('');
+            if (!isPast && totalHours) html += `<div class="cal-tooltip-time">Total: ${formatTime(totalHours)}</div>`;
+          }
+
+          tip.innerHTML = html;
+          tip.style.display = 'block';
+
+          // Position clamped to viewport — works on both desktop and mobile
+          const r = e.target.getBoundingClientRect();
+          const tipW = Math.min(280, window.innerWidth - 16);
+          const tipH = tip.offsetHeight || 120;
+          const margin = 8;
+
+          let left = r.right + margin;
+          if (left + tipW > window.innerWidth - margin) left = r.left - tipW - margin;
+          left = Math.max(margin, Math.min(left, window.innerWidth - tipW - margin));
+
+          let top = r.top;
+          if (top + tipH > window.innerHeight - margin) top = window.innerHeight - tipH - margin;
+          top = Math.max(margin, top);
+
+          tip.style.left = left + 'px';
+          tip.style.top = top + 'px';
+          tip.style.maxWidth = tipW + 'px';
+        });
+        el.addEventListener('mouseleave', () => {
+          document.getElementById('cal-tooltip').style.display = 'none';
+        });
+
+        grid.appendChild(el);
+      }
+    }
+
+    function renderFilter() {
+      const status   = document.getElementById('filter-status').value;
+      const priority = document.getElementById('filter-priority').value;
+      const allNodes = Object.values(data.nodes).filter(n => !n.archived);
+
+      const matched = allNodes.filter(n => {
+        if (status   && n.status   !== status)   return false;
+        if (priority && n.priority !== priority) return false;
+        return true;
+      });
+
+      filterListEl.innerHTML = '';
+      filterCountEl.textContent = String(matched.length);
+      if (!matched.length) {
+        filterListEl.innerHTML = '<div class="empty">No matching tasks.</div>';
+      } else {
+        matched.forEach(node => filterListEl.appendChild(miniCard(node)));
+      }
+    }
+
+    function render() {
+      renderLanes();
+      renderRoots();
+      renderDone();
+      renderCalendar();
+      renderFilter();
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // stored: YYYY-MM-DD  ↔  display: dd/mm/yyyy
+    function toDisplayDate(iso) {
+      if (!iso) return '';
+      const [y, m, d] = iso.split('-');
+      if (!y || !m || !d) return '';
+      return `${d}/${m}/${y}`;
+    }
+
+    function toIsoDate(display) {
+      if (!display) return '';
+      // Accept dd/mm/yyyy or dd-mm-yyyy
+      const parts = display.split(/[\/\-]/);
+      if (parts.length !== 3) return '';
+      const [d, m, y] = parts;
+      if (!d || !m || !y || y.length !== 4) return '';
+      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+
+    function populateRelatesSelect(currentNodeId) {
+      const wrap = document.getElementById('form-relates-wrap');
+      wrap.innerHTML = '';
+      const current = currentNodeId ? (data.nodes[currentNodeId]?.relates_to || []) : [];
+      const others = Object.values(data.nodes).filter(n => n.id !== currentNodeId);
+      if (!others.length) {
+        wrap.innerHTML = '<div class="relates-empty">No other items yet.</div>';
+        return;
+      }
+      others.forEach(n => {
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = n.id;
+        cb.checked = current.includes(n.id);
+        const span = document.createElement('span');
+        span.textContent = `${n.name} (${typeLabels[n.type] || n.type})`;
+        label.appendChild(cb);
+        label.appendChild(span);
+        wrap.appendChild(label);
+      });
+    }
+
+    function openAddDialog(anchorId, mode) {
+      addState = { open: true, anchorId, mode, editId: null };
+      const anchor = data.nodes[anchorId];
+      const childType = anchor ? (typeChildren[anchor.type] || 'subtask') : 'subtask';
+      document.getElementById('modal-title').textContent = `Add ${typeLabels[childType] || childType}`;
+      document.getElementById('form-name').value = '';
+      document.getElementById('form-description').value = '';
+      populateRelatesSelect(null);
+      document.getElementById('form-priority').value = 'medium';
+      document.getElementById('form-status').value = 'open';
+      document.getElementById('form-target-date').value = '';
+      document.getElementById('form-time').value = '';
+      document.getElementById('form-image-file').value = '';
+      document.getElementById('form-image-preview').innerHTML = 'Select an image — it will be uploaded to images/ on the server automatically.';
+      document.getElementById('modal-backdrop').classList.add('open');
+      document.getElementById('form-name').focus();
+      openMenuId = null;
+    }
+
+    function openEditDialog(nodeId) {
+      const node = data.nodes[nodeId];
+      if (!node) return;
+      addState = { open: true, anchorId: node.parent_id, mode: 'edit', editId: nodeId };
+      document.getElementById('modal-title').textContent = 'Edit item';
+      document.getElementById('form-name').value = node.name || '';
+      document.getElementById('form-description').value = node.description || '';
+      populateRelatesSelect(nodeId);
+      document.getElementById('form-priority').value = node.priority || 'medium';
+      document.getElementById('form-status').value = node.status || 'open';
+      document.getElementById('form-target-date').value = toDisplayDate(node.target_date);
+      document.getElementById('form-time').value = node.time_estimate != null ? node.time_estimate : '';
+      document.getElementById('form-image').value = node.image || '';
+      document.getElementById('form-image-file').value = '';
+      document.getElementById('form-image-preview').innerHTML = node.image ? `Current: ${escapeHtml(node.image)}<br><img src="${imageUrl(node.image)}" alt="" class="thumb" />` : 'No image selected';
+      document.getElementById('modal-backdrop').classList.add('open');
+      openMenuId = null;
+    }
+
+    function closeAddDialog() {
+      addState = { open: false, anchorId: null, mode: 'child', editId: null };
+      document.getElementById('modal-backdrop').classList.remove('open');
+    }
+
+    function collectDescendants(nodeId, result = []) {
+      const node = data.nodes[nodeId];
+      if (!node) return result;
+      result.push(nodeId);
+      (node.children || []).forEach(childId => collectDescendants(childId, result));
+      return result;
+    }
+
+    function deleteNodeWithChildren(nodeId) {
+      const node = data.nodes[nodeId];
+      if (!node) return;
+      const label = node.name || nodeId;
+      const ok = window.confirm(`Delete "${label}" and all nested items?`);
+      if (!ok) return;
+
+      const idsToDelete = collectDescendants(nodeId, []);
+
+      if (node.parent_id && data.nodes[node.parent_id]) {
+        data.nodes[node.parent_id].children = (data.nodes[node.parent_id].children || []).filter(id => id !== nodeId);
+      } else {
+        data.settings.root_ids = (data.settings.root_ids || []).filter(id => id !== nodeId);
+      }
+
+      idsToDelete.forEach(id => delete data.nodes[id]);
+
+      Object.values(data.nodes).forEach(existingNode => {
+        existingNode.relates_to = (existingNode.relates_to || []).filter(id => !idsToDelete.includes(id));
+      });
+
+      openMenuId = null;
+      saveState();
+      render();
+    }
+
+    function selectedRelates() {
+      return Array.from(document.querySelectorAll('#form-relates-wrap input[type=checkbox]:checked'))
+        .map(cb => cb.value);
+    }
+
+    function addNode() {
+      const name = document.getElementById('form-name').value.trim();
+      if (!name) return;
+
+      if (addState.mode === 'edit' && addState.editId) {
+        const node = data.nodes[addState.editId];
+        if (!node) return;
+        node.name = name;
+        node.description = document.getElementById('form-description').value.trim();
+        node.image = document.getElementById('form-image').value.trim() || null;
+        node.priority = document.getElementById('form-priority').value;
+        node.status = document.getElementById('form-status').value;
+        node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
+        node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
+        node.relates_to = selectedRelates();
+        saveState();
+        closeAddDialog();
+        render();
+        return;
+      }
+
+      if (!addState.anchorId) return;
+      const anchor = data.nodes[addState.anchorId];
+      if (!anchor) return;
+
+      const parentId = anchor.id;
+      const newType = typeChildren[anchor.type] || 'subtask';
+      const insertInto = anchor.id;
+      const newId = makeId(newType);
+
+      data.nodes[newId] = {
+        id: newId,
+        type: newType,
+        parent_id: parentId,
+        name,
+        description: document.getElementById('form-description').value.trim(),
+        image: document.getElementById('form-image').value.trim() || null,
+        children: [],
+        collapsed: false,
+        priority: document.getElementById('form-priority').value,
+        status: document.getElementById('form-status').value,
+        target_date: toIsoDate(document.getElementById('form-target-date').value) || null,
+        time_estimate: parseFloat(document.getElementById('form-time').value) || null,
+        relates_to: selectedRelates(),
+        archived: false
+      };
+
+      if (!data.nodes[insertInto].children) data.nodes[insertInto].children = [];
+      data.nodes[insertInto].children.push(newId);
+      data.nodes[insertInto].collapsed = false;
+
+      saveState();
+      closeAddDialog();
+      render();
+    }
+
+    document.getElementById('modal-cancel').addEventListener('click', closeAddDialog);
+    document.getElementById('modal-add').addEventListener('click', addNode);
+    document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+      if (e.target.id === 'modal-backdrop') closeAddDialog();
+    });
+
+    // Calendar button: open the hidden date picker, sync value back as dd/mm/yyyy
+    document.getElementById('form-date-picker-btn').addEventListener('click', () => {
+      const picker = document.getElementById('form-target-date-picker');
+      // Seed picker with current text value if valid
+      const cur = document.getElementById('form-target-date').value;
+      const iso = toIsoDate(cur);
+      if (iso) picker.value = iso;
+      picker.showPicker?.() || picker.click();
+    });
+
+    document.getElementById('form-target-date-picker').addEventListener('change', (e) => {
+      if (e.target.value) {
+        document.getElementById('form-target-date').value = toDisplayDate(e.target.value);
+      }
+    });
+
+    // Dismiss peek 1s after mouse leaves the browser window
+    document.addEventListener('mouseleave', () => schedulePeekDismiss(1000));
+    document.addEventListener('mouseenter', () => clearTimeout(peekDismissTimer));
+
+    // Escape key dismisses peek popup
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hidePeekPopup();
+      // Ignore when typing in an input/textarea or modal is open
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (document.getElementById('modal-backdrop').classList.contains('open')) return;
+
+      if (e.key === 'n' || e.key === 'N') {
+        if (hoveredNodeId && data.nodes[hoveredNodeId]) {
+          const node = data.nodes[hoveredNodeId];
+          const childType = typeChildren[node.type];
+          if (childType) {
+            openAddDialog(hoveredNodeId, 'child');
+          } else {
+            showKbdHint(`${typeLabels[node.type]} has no child type`);
+          }
+        } else {
+          showKbdHint('Hover over a card first, then press N');
+        }
+      }
+    });
+
+    document.getElementById('form-image-file').addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const previewEl = document.getElementById('form-image-preview');
+      const pathInput = document.getElementById('form-image');
+
+      if (IS_HTTP) {
+        previewEl.textContent = 'Uploading…';
+        try {
+          const savedPath = await serverUploadImage(file);
+          pathInput.value = savedPath;
+          const previewUrl = URL.createObjectURL(file);
+          previewEl.innerHTML = `Saved: ${escapeHtml(savedPath)}<br><img src="${previewUrl}" alt="" class="thumb" />`;
+        } catch {
+          previewEl.textContent = '⚠ Upload failed — check that the server is running.';
+        }
+      } else {
+        // file:// fallback: just fill in the expected path
+        pathInput.value = `images/${file.name}`;
+        const previewUrl = URL.createObjectURL(file);
+        previewEl.innerHTML = `Path set (copy the file manually to images/):<br>${escapeHtml(`images/${file.name}`)}<br><img src="${previewUrl}" alt="" class="thumb" />`;
+      }
+    });
+
+    document.getElementById('add-root-btn').addEventListener('click', () => {
+      const newId = makeId('space');
+      data.nodes[newId] = {
+        id: newId,
+        type: 'space',
+        parent_id: null,
+        name: `Space ${Object.keys(data.nodes).filter(id => data.nodes[id].type === 'space').length + 1}`,
+        description: '',
+        image: null,
+        children: [],
+        collapsed: false,
+        priority: 'medium',
+        status: 'open',
+        target_date: null,
+        time_estimate: null,
+        relates_to: [],
+        archived: false
+      };
+      if (!data.settings.root_ids) data.settings.root_ids = [];
+      data.settings.root_ids.push(newId);
+      saveState();
+      render();
+      openEditDialog(newId);
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('import-btn').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    document.getElementById('file-input').addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          if (!parsed?.nodes || !parsed?.settings?.root_ids) throw new Error('Invalid format');
+          data = parsed;
+          migrateData();
+          saveState();
+          render();
+        } catch {
+          alert('Invalid JSON file.');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.menu-wrap')) {
+        if (openMenuId !== null) {
+          openMenuId = null;
+          render();
+        }
+        // Close any open peek menu
+        const peekMenu = document.querySelector('#peek-popup .menu.open');
+        if (peekMenu) { peekMenu.classList.remove('open'); return; }
+      }
+      // Dismiss peek popup unless the click was inside it or on a compact card
+      if (!e.target.closest('.compact-child-card, .compact-grandchild-card, #peek-popup')) {
+        hidePeekPopup();
+      }
+    });
+
+    document.getElementById('filter-status').addEventListener('change', renderFilter);
+    document.getElementById('filter-priority').addEventListener('change', renderFilter);
+
+    document.getElementById('cal-prev').addEventListener('click', () => {
+      calState.month--;
+      if (calState.month < 0) { calState.month = 11; calState.year--; }
+      renderCalendar();
+    });
+    document.getElementById('cal-next').addEventListener('click', () => {
+      calState.month++;
+      if (calState.month > 11) { calState.month = 0; calState.year++; }
+      renderCalendar();
+    });
+    document.getElementById('cal-expand').addEventListener('click', () => {
+      const panel = document.getElementById('cal-panel');
+      const isExpanded = panel.classList.toggle('cal-expanded');
+      document.getElementById('cal-expand').textContent = isExpanded ? '⤡' : '⤢';
+      document.getElementById('cal-expand').title = isExpanded ? 'Collapse calendar' : 'Expand calendar';
+    });
+
+    initData();
+    initWeather();
+  </script>
+</body>
+</html>
