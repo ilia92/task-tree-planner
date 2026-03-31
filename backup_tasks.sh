@@ -37,9 +37,12 @@ DEST_FILE="$DEST_DIR/$TIMESTAMP.json"
 # ── Change detection via md5 ─────────────────────────────────────────────────
 SOURCE_MD5=$(md5sum "$SOURCE" | awk '{print $1}')
 
-# Find the most recent backup in any subdirectory
-LATEST=$(find "$BACKUP_ROOT" -name '*.json' -printf '%T@ %p\n' 2>/dev/null \
-         | sort -n | tail -1 | awk '{print $2}' || true)
+# Find the most recent backup by filename (names encode timestamp lexicographically).
+# Avoid sorting by mtime — file copies/touches would give wrong results.
+LATEST=""
+if [[ -d "$BACKUP_ROOT" ]]; then
+  LATEST=$(find "$BACKUP_ROOT" -name '*.json' -print 2>/dev/null | sort | tail -1)
+fi
 
 if [[ -n "$LATEST" ]]; then
   LATEST_MD5=$(md5sum "$LATEST" | awk '{print $1}')
