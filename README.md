@@ -2,7 +2,7 @@
 
 A self-hosted, local-first task management tool — **one HTML file + one Python file**. No framework, no database, no cloud. Your data stays on your machine as plain JSON.
 
-![Task Tree Planner screenshot](docs/screenshot.png)
+![Task Tree Planner screenshot](example/example.png)
 
 ---
 
