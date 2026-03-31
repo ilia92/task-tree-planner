@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Task Tree Planner</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='13' y='22' width='6' height='9' rx='1' fill='%237c3f00'/%3E%3Cpolygon points='16,1 4,13 28,13' fill='%2322c55e'/%3E%3Cpolygon points='16,8 3,19 29,19' fill='%2316a34a'/%3E%3Cpolygon points='16,14 2,25 30,25' fill='%2315803d'/%3E%3C/svg%3E" />
   <style>
     :root {
       --bg: #f3f4f6;
@@ -974,7 +975,7 @@
   <div class="container">
     <div class="topbar">
       <div>
-        <h1>Task Tree Planner</h1>
+        <h1><svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><rect x="13" y="22" width="6" height="9" rx="1" fill="#7c3f00"/><polygon points="16,1 4,13 28,13" fill="#22c55e"/><polygon points="16,8 3,19 29,19" fill="#16a34a"/><polygon points="16,14 2,25 30,25" fill="#15803d"/></svg>Task Tree Planner</h1>
         <p class="subtle">Plain HTML + JS. JSON-backed. Compact/expanded hierarchy, done lane, and add-from-box workflow.</p>
       </div>
       <div class="actions">
@@ -1540,7 +1541,7 @@
       card.className = `node-card priority-${node.priority || 'low'}`;
       card.innerHTML = renderNodeCardContent(node);
       const head = card.querySelector('.node-head');
-      head.appendChild(createMenu(node, { doneSection: false, allowAddChild: false, allowEdit: true, allowDelete: false }));
+      head.appendChild(createMenu(node, { doneSection: false, allowAddChild: true, allowEdit: true, allowDelete: false }));
       wrapper.appendChild(card);
       return wrapper;
     }
@@ -1682,7 +1683,7 @@
 
       if (node.status !== 'done') {
         const completeBtn = document.createElement('button');
-        completeBtn.textContent = 'Complete';
+        completeBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✅</span>Complete';
         completeBtn.addEventListener('click', () => {
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
           data.nodes[node.id].status = 'done';
@@ -1697,12 +1698,19 @@
       }
 
       const editBtn = document.createElement('button');
-      editBtn.textContent = 'Edit';
+      editBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✏️</span>Edit';
       editBtn.addEventListener('click', () => { hidePeekPopup(); openEditDialog(node.id); });
       menu.appendChild(editBtn);
 
+      if (typeChildren[node.type]) {
+        const addChildBtn = document.createElement('button');
+        addChildBtn.innerHTML = `<span aria-hidden="true" style="margin-right:7px">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
+        addChildBtn.addEventListener('click', () => { hidePeekPopup(); openAddDialog(node.id, 'child'); });
+        menu.appendChild(addChildBtn);
+      }
+
       const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = 'Delete';
+      deleteBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">🗑️</span>Delete';
       deleteBtn.addEventListener('click', () => { hidePeekPopup(); deleteNodeWithChildren(node.id); });
       menu.appendChild(deleteBtn);
 
@@ -1731,7 +1739,7 @@
 
       if (!doneSection && node.status !== 'done') {
         const completeBtn = document.createElement('button');
-        completeBtn.textContent = 'Complete';
+        completeBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✅</span>Complete';
         completeBtn.addEventListener('click', () => {
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
           data.nodes[node.id].status = 'done';
@@ -1746,21 +1754,21 @@
 
       if (allowEdit) {
         const editBtn = document.createElement('button');
-        editBtn.textContent = 'Edit';
+        editBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✏️</span>Edit';
         editBtn.addEventListener('click', () => openEditDialog(node.id));
         menu.appendChild(editBtn);
       }
 
-      if (allowAddChild) {
+      if (allowAddChild && typeChildren[node.type]) {
         const addChildBtn = document.createElement('button');
-        addChildBtn.textContent = `New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
+        addChildBtn.innerHTML = `<span aria-hidden="true" style="margin-right:7px">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
         addChildBtn.addEventListener('click', () => openAddDialog(node.id, 'child'));
         menu.appendChild(addChildBtn);
       }
 
       if (allowDelete) {
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">🗑️</span>Delete';
         deleteBtn.addEventListener('click', () => deleteNodeWithChildren(node.id));
         menu.appendChild(deleteBtn);
       }
@@ -1845,8 +1853,8 @@
       btn.title = 'Compact';
       // Inward arrows: top-right → center, bottom-left → center  (/ diagonal)
       btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2L10 6M10 3V6H13"/>
-        <path d="M2 14L6 10M6 13V10H3"/>
+        <path d="M14 2L9 7M14 6V2H10"/>
+        <path d="M2 14L7 9M2 10V14H6"/>
       </svg>`;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1923,10 +1931,10 @@
         expandBtn.className = 'expand-btn';
         expandBtn.type = 'button';
         expandBtn.title = 'Expand';
-        // Outward arrows: center → top-left, center → bottom-right  (\ diagonal)
+        // Outward arrows: center → top-right, center → bottom-left  (/ diagonal)
         expandBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 6L2 2M2 5V2H5"/>
-          <path d="M10 10L14 14M14 11V14H11"/>
+          <path d="M9 7L14 2M10 2H14V6"/>
+          <path d="M7 9L2 14M6 14H2V10"/>
         </svg>`;
         expandBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1934,7 +1942,13 @@
           saveState();
           render();
         });
-        head.appendChild(expandBtn);
+
+        // Controls: [expand-btn] [burger-menu]
+        const controls = document.createElement('div');
+        controls.className = 'node-controls';
+        controls.appendChild(expandBtn);
+        controls.appendChild(createMenu(node, { doneSection: false, allowAddChild: true, allowEdit: true, allowDelete: true }));
+        head.appendChild(controls);
         card.appendChild(head);
 
         const childrenEl = renderCompactChildren(node, 0);
@@ -1950,7 +1964,7 @@
         const controls = document.createElement('div');
         controls.className = 'node-controls';
         controls.appendChild(makeCompactBtn(node));
-        controls.appendChild(createMenu(node, { doneSection: false, allowAddChild: false, allowEdit: true, allowDelete: true }));
+        controls.appendChild(createMenu(node, { doneSection: false, allowAddChild: true, allowEdit: true, allowDelete: true }));
         head.appendChild(controls);
 
         // New child button at bottom of card content
@@ -2391,11 +2405,15 @@
     // Calendar button: open the hidden date picker, sync value back as dd/mm/yyyy
     document.getElementById('form-date-picker-btn').addEventListener('click', () => {
       const picker = document.getElementById('form-target-date-picker');
-      // Seed picker with current text value if valid
+      // Seed picker with current text value if valid, clear first so re-picking same date fires change
       const cur = document.getElementById('form-target-date').value;
       const iso = toIsoDate(cur);
-      if (iso) picker.value = iso;
-      picker.showPicker?.() || picker.click();
+      picker.value = iso || '';
+      if (typeof picker.showPicker === 'function') {
+        picker.showPicker();
+      } else {
+        picker.click();
+      }
     });
 
     document.getElementById('form-target-date-picker').addEventListener('change', (e) => {
