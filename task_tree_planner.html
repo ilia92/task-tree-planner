@@ -374,42 +374,12 @@
     }
 
     .menu button:hover { background: #f9fafb; }
+    .menu-icon { margin-right: 7px; }
 
     .done-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 14px;
-    }
-
-    .done-card-wrap { position: relative; }
-
-    .done-card {
-      background: var(--done-bg);
-      border: 2px solid #cbd5e1;
-      color: var(--done-text);
-      border-radius: 18px;
-      padding: 16px;
-      min-height: 120px;
-      opacity: 0.86;
-    }
-
-    .done-card .title {
-      font-size: 18px;
-      font-weight: 700;
-      text-decoration: line-through;
-      margin-bottom: 8px;
-    }
-
-    .done-x {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      font-size: 80px;
-      color: rgba(100, 116, 139, 0.45);
-      font-weight: 700;
     }
 
     .modal-backdrop {
@@ -535,7 +505,9 @@
       font-weight: 900;
       border-radius: var(--radius);
       overflow: hidden;
-    }    .node-with-image {
+    }
+
+    .node-with-image {
       display: flex;
       gap: 12px;
       align-items: flex-start;
@@ -849,9 +821,6 @@
     /* Expanded calendar — full width below the lane row */
     #cal-panel.cal-expanded {
       grid-column: 1 / -1;
-    }
-    #cal-panel.cal-expanded .cal-grid {
-      grid-template-columns: repeat(7, 1fr);
     }
     #cal-panel.cal-expanded .cal-day-num {
       font-size: 15px;
@@ -1239,6 +1208,7 @@
     let openMenuId = null;
     let hoveredNodeId = null;
     let weatherByDate = {};   // iso → { emoji, label, temp_max, temp_min, precip, isHistory }
+    let _previewObjectUrl = null; // tracks current image-preview blob URL so it can be revoked
     const calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
 
     // ── Weather ───────────────────────────────────────────────────────────────
@@ -1322,10 +1292,10 @@
       // Build content
       popup.innerHTML = renderNodeCardContent(node);
 
-      // Add burger menu in the node-head (peek-specific, no full render on toggle)
+      // Add burger menu in the node-head
       const head = popup.querySelector('.node-head');
       if (head) {
-        head.appendChild(createPeekMenu(node));
+        head.appendChild(createMenu(node, { doneSection: node.status === 'done', allowAddChild: true, allowEdit: true, allowDelete: true }));
       }
 
       popup.classList.add('visible');
@@ -1480,11 +1450,6 @@
       return `<span class="${cls}" title="${title}">⏱ ${escapeHtml(label)}</span>`;
     }
 
-    // Only shown on leaf nodes (no children) — parents' scheduling is implicit
-    function schedulePillHtml(node) {
-      return '';
-    }
-
     function datePillHtml(node) {
       if (!node.target_date) return '';
       const d = new Date(node.target_date + 'T12:00:00');
@@ -1618,105 +1583,11 @@
       const doneNodes = getDoneNodes();
       doneListEl.innerHTML = '';
       doneCountEl.textContent = String(doneNodes.length);
-
       if (!doneNodes.length) {
         doneListEl.innerHTML = '<div class="empty">Nothing completed yet.</div>';
         return;
       }
-
-      doneNodes.forEach(node => {
-        const wrap = document.createElement('div');
-        wrap.className = 'done-card-wrap';
-
-        // X watermark
-        const xEl = document.createElement('div');
-        xEl.className = 'done-x';
-        xEl.textContent = '×';
-        wrap.appendChild(xEl);
-
-        // Reuse the standard card content, just apply done-card class for greying
-        const card = document.createElement('div');
-        card.className = `done-card node-card priority-${node.priority || 'low'}`;
-        card.innerHTML = renderNodeCardContent(node);
-
-        // Completion date badge
-        if (node.completed_date) {
-          const pillsRow = card.querySelector('.node-pills-row');
-          if (pillsRow) {
-            const badge = document.createElement('span');
-            badge.className = 'pill pill-completed-date';
-            badge.title = 'Completed on';
-            badge.textContent = `✓ ${formatDate(node.completed_date)}`;
-            pillsRow.appendChild(badge);
-          }
-        }
-
-        // Burger menu (edit / delete only, no add-child, no complete)
-        const head = card.querySelector('.node-head');
-        head.appendChild(createMenu(node, { doneSection: true, allowAddChild: false, allowEdit: true, allowDelete: true }));
-
-        wrap.appendChild(card);
-        doneListEl.appendChild(wrap);
-      });
-    }
-
-    // Menu for inside the peek popup — toggles open class directly, no full render()
-    function createPeekMenu(node) {
-      const wrap = document.createElement('div');
-      wrap.className = 'menu-wrap';
-      wrap.style.position = 'relative';
-
-      const btn = document.createElement('button');
-      btn.className = 'menu-btn';
-      btn.type = 'button';
-      btn.textContent = '☰';
-
-      const menu = document.createElement('div');
-      menu.className = 'menu';
-      menu.style.zIndex = '10000';
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = menu.classList.contains('open');
-        menu.classList.toggle('open', !isOpen);
-      });
-
-      if (node.status !== 'done') {
-        const completeBtn = document.createElement('button');
-        completeBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✅</span>Complete';
-        completeBtn.addEventListener('click', () => {
-          if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
-          data.nodes[node.id].status = 'done';
-          data.nodes[node.id].collapsed = true;
-          data.nodes[node.id].completed_date = dateKey(0);
-          openMenuId = null;
-          hidePeekPopup();
-          saveState();
-          render();
-        });
-        menu.appendChild(completeBtn);
-      }
-
-      const editBtn = document.createElement('button');
-      editBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✏️</span>Edit';
-      editBtn.addEventListener('click', () => { hidePeekPopup(); openEditDialog(node.id); });
-      menu.appendChild(editBtn);
-
-      if (typeChildren[node.type]) {
-        const addChildBtn = document.createElement('button');
-        addChildBtn.innerHTML = `<span aria-hidden="true" style="margin-right:7px">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
-        addChildBtn.addEventListener('click', () => { hidePeekPopup(); openAddDialog(node.id, 'child'); });
-        menu.appendChild(addChildBtn);
-      }
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">🗑️</span>Delete';
-      deleteBtn.addEventListener('click', () => { hidePeekPopup(); deleteNodeWithChildren(node.id); });
-      menu.appendChild(deleteBtn);
-
-      wrap.appendChild(btn);
-      wrap.appendChild(menu);
-      return wrap;
+      doneNodes.forEach(node => doneListEl.appendChild(miniCardDone(node)));
     }
 
     function createMenu(node, options = {}) {
@@ -1730,16 +1601,22 @@
       btn.textContent = '☰';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openMenuId = openMenuId === node.id ? null : node.id;
-        render();
+        // Close any other open menu without a full re-render
+        document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+        if (openMenuId === node.id) {
+          openMenuId = null;
+        } else {
+          openMenuId = node.id;
+          menu.classList.add('open');
+        }
       });
 
       const menu = document.createElement('div');
-      menu.className = 'menu' + (openMenuId === node.id ? ' open' : '');
+      menu.className = 'menu';
 
       if (!doneSection && node.status !== 'done') {
         const completeBtn = document.createElement('button');
-        completeBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✅</span>Complete';
+        completeBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">✅</span>Complete';
         completeBtn.addEventListener('click', () => {
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
           data.nodes[node.id].status = 'done';
@@ -1754,21 +1631,21 @@
 
       if (allowEdit) {
         const editBtn = document.createElement('button');
-        editBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">✏️</span>Edit';
+        editBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">✏️</span>Edit';
         editBtn.addEventListener('click', () => openEditDialog(node.id));
         menu.appendChild(editBtn);
       }
 
       if (allowAddChild && typeChildren[node.type]) {
         const addChildBtn = document.createElement('button');
-        addChildBtn.innerHTML = `<span aria-hidden="true" style="margin-right:7px">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
+        addChildBtn.innerHTML = `<span aria-hidden="true" class="menu-icon">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
         addChildBtn.addEventListener('click', () => openAddDialog(node.id, 'child'));
         menu.appendChild(addChildBtn);
       }
 
       if (allowDelete) {
         const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '<span aria-hidden="true" style="margin-right:7px">🗑️</span>Delete';
+        deleteBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">🗑️</span>Delete';
         deleteBtn.addEventListener('click', () => deleteNodeWithChildren(node.id));
         menu.appendChild(deleteBtn);
       }
@@ -2201,6 +2078,8 @@
     }
 
     function render() {
+      openMenuId = null;
+      hidePeekPopup();
       renderLanes();
       renderRoots();
       renderDone();
@@ -2227,12 +2106,17 @@
 
     function toIsoDate(display) {
       if (!display) return '';
-      // Accept dd/mm/yyyy or dd-mm-yyyy
       const parts = display.split(/[\/\-]/);
       if (parts.length !== 3) return '';
       const [d, m, y] = parts;
       if (!d || !m || !y || y.length !== 4) return '';
-      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      const day = parseInt(d, 10), month = parseInt(m, 10), year = parseInt(y, 10);
+      if (isNaN(day) || isNaN(month) || isNaN(year)) return '';
+      if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+      // Final check: let Date reject impossible combos like Feb 30
+      const iso = `${y}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      if (isNaN(new Date(iso + 'T12:00:00').getTime())) return '';
+      return iso;
     }
 
     function populateRelatesSelect(currentNodeId) {
@@ -2259,6 +2143,7 @@
     }
 
     function openAddDialog(anchorId, mode) {
+      hidePeekPopup();
       addState = { open: true, anchorId, mode, editId: null };
       const anchor = data.nodes[anchorId];
       const childType = anchor ? (typeChildren[anchor.type] || 'subtask') : 'subtask';
@@ -2270,6 +2155,7 @@
       document.getElementById('form-status').value = 'open';
       document.getElementById('form-target-date').value = '';
       document.getElementById('form-time').value = '';
+      document.getElementById('form-image').value = '';
       document.getElementById('form-image-file').value = '';
       document.getElementById('form-image-preview').innerHTML = 'Select an image — it will be uploaded to images/ on the server automatically.';
       document.getElementById('modal-backdrop').classList.add('open');
@@ -2278,6 +2164,7 @@
     }
 
     function openEditDialog(nodeId) {
+      hidePeekPopup();
       const node = data.nodes[nodeId];
       if (!node) return;
       addState = { open: true, anchorId: node.parent_id, mode: 'edit', editId: nodeId };
@@ -2297,6 +2184,7 @@
     }
 
     function closeAddDialog() {
+      if (_previewObjectUrl) { URL.revokeObjectURL(_previewObjectUrl); _previewObjectUrl = null; }
       addState = { open: false, anchorId: null, mode: 'child', editId: null };
       document.getElementById('modal-backdrop').classList.remove('open');
     }
@@ -2347,11 +2235,18 @@
       if (addState.mode === 'edit' && addState.editId) {
         const node = data.nodes[addState.editId];
         if (!node) return;
+        const newStatus = document.getElementById('form-status').value;
         node.name = name;
         node.description = document.getElementById('form-description').value.trim();
         node.image = document.getElementById('form-image').value.trim() || null;
         node.priority = document.getElementById('form-priority').value;
-        node.status = document.getElementById('form-status').value;
+        node.status = newStatus;
+        // Keep completed_date in sync with status
+        if (newStatus === 'done' && node.status !== 'done' && !node.completed_date) {
+          node.completed_date = dateKey(0);
+        } else if (newStatus !== 'done') {
+          node.completed_date = null;
+        }
         node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
         node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
         node.relates_to = selectedRelates();
@@ -2367,7 +2262,6 @@
 
       const parentId = anchor.id;
       const newType = typeChildren[anchor.type] || 'subtask';
-      const insertInto = anchor.id;
       const newId = makeId(newType);
 
       data.nodes[newId] = {
@@ -2387,9 +2281,9 @@
         archived: false
       };
 
-      if (!data.nodes[insertInto].children) data.nodes[insertInto].children = [];
-      data.nodes[insertInto].children.push(newId);
-      data.nodes[insertInto].collapsed = false;
+      if (!data.nodes[parentId].children) data.nodes[parentId].children = [];
+      data.nodes[parentId].children.push(newId);
+      data.nodes[parentId].collapsed = false;
 
       saveState();
       closeAddDialog();
@@ -2454,21 +2348,22 @@
       const previewEl = document.getElementById('form-image-preview');
       const pathInput = document.getElementById('form-image');
 
+      if (_previewObjectUrl) { URL.revokeObjectURL(_previewObjectUrl); _previewObjectUrl = null; }
+
       if (IS_HTTP) {
         previewEl.textContent = 'Uploading…';
         try {
           const savedPath = await serverUploadImage(file);
           pathInput.value = savedPath;
-          const previewUrl = URL.createObjectURL(file);
-          previewEl.innerHTML = `Saved: ${escapeHtml(savedPath)}<br><img src="${previewUrl}" alt="" class="thumb" />`;
+          _previewObjectUrl = URL.createObjectURL(file);
+          previewEl.innerHTML = `Saved: ${escapeHtml(savedPath)}<br><img src="${_previewObjectUrl}" alt="" class="thumb" />`;
         } catch {
           previewEl.textContent = '⚠ Upload failed — check that the server is running.';
         }
       } else {
-        // file:// fallback: just fill in the expected path
         pathInput.value = `images/${file.name}`;
-        const previewUrl = URL.createObjectURL(file);
-        previewEl.innerHTML = `Path set (copy the file manually to images/):<br>${escapeHtml(`images/${file.name}`)}<br><img src="${previewUrl}" alt="" class="thumb" />`;
+        _previewObjectUrl = URL.createObjectURL(file);
+        previewEl.innerHTML = `Path set (copy the file manually to images/):<br>${escapeHtml(`images/${file.name}`)}<br><img src="${_previewObjectUrl}" alt="" class="thumb" />`;
       }
     });
 
@@ -2535,13 +2430,9 @@
       if (!e.target.closest('.menu-wrap')) {
         if (openMenuId !== null) {
           openMenuId = null;
-          render();
+          document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
         }
-        // Close any open peek menu
-        const peekMenu = document.querySelector('#peek-popup .menu.open');
-        if (peekMenu) { peekMenu.classList.remove('open'); return; }
       }
-      // Dismiss peek popup unless the click was inside it or on a compact card
       if (!e.target.closest('.compact-child-card, .compact-grandchild-card, #peek-popup')) {
         hidePeekPopup();
       }
