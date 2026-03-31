@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "settings": {
+    "images_dir": "images/",
+    "root_ids": [
+      "space_1",
+      "space_2"
+    ]
+  },
+  "nodes": {
+    "space_1": {
+      "id": "space_1",
+      "type": "space",
+      "parent_id": null,
+      "name": "Example Projects",
+      "description": "Demo space for task tree planner",
+      "children": [
+        "project_1",
+        "project_2"
+      ],
+      "collapsed": true,
+      "priority": "medium",
+      "status": "open",
+      "relates_to": [],
+      "time_estimate": null,
+      "completed_date": null
+    },
+    "project_1": {
+      "id": "project_1",
+      "type": "project",
+      "parent_id": "space_1",
+      "name": "Website Development",
+      "children": [
+        "task_1",
+        "task_2"
+      ],
+      "priority": "high",
+      "status": "open",
+      "relates_to": [],
+      "time_estimate": null,
+      "completed_date": null
+    },
+    "task_1": {
+      "id": "task_1",
+      "type": "task",
+      "parent_id": "project_1",
+      "name": "Design landing page",
+      "target_date": "2026-04-05",
+      "time_estimate": 6,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "task_2": {
+      "id": "task_2",
+      "type": "task",
+      "parent_id": "project_1",
+      "name": "Implement calculator",
+      "children": [
+        "subtask_1"
+      ],
+      "target_date": "2026-04-08",
+      "time_estimate": 8,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "subtask_1": {
+      "id": "subtask_1",
+      "type": "subtask",
+      "parent_id": "task_2",
+      "name": "Write calculation logic",
+      "target_date": "2026-04-07",
+      "time_estimate": 3,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "project_2": {
+      "id": "project_2",
+      "type": "project",
+      "parent_id": "space_1",
+      "name": "Quick Delivery Project",
+      "children": [
+        "task_3",
+        "task_4",
+        "task_5"
+      ],
+      "priority": "high",
+      "status": "open",
+      "relates_to": [],
+      "time_estimate": null,
+      "completed_date": null
+    },
+    "task_3": {
+      "id": "task_3",
+      "type": "task",
+      "parent_id": "project_2",
+      "name": "Order materials",
+      "target_date": "2026-04-01",
+      "time_estimate": 2,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "task_4": {
+      "id": "task_4",
+      "type": "task",
+      "parent_id": "project_2",
+      "name": "Assemble unit",
+      "target_date": "2026-04-03",
+      "time_estimate": 6,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "task_5": {
+      "id": "task_5",
+      "type": "task",
+      "parent_id": "project_2",
+      "name": "Deliver to client",
+      "target_date": "2026-04-06",
+      "time_estimate": 3,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "space_2": {
+      "id": "space_2",
+      "type": "space",
+      "parent_id": null,
+      "name": "Daily Operations",
+      "description": "Short-term operational tasks",
+      "children": [
+        "project_3"
+      ],
+      "collapsed": false,
+      "priority": "high",
+      "status": "open",
+      "relates_to": [],
+      "time_estimate": null,
+      "completed_date": null
+    },
+    "project_3": {
+      "id": "project_3",
+      "type": "project",
+      "parent_id": "space_2",
+      "name": "Urgent Tasks",
+      "children": [
+        "task_6",
+        "task_7",
+        "task_8"
+      ],
+      "priority": "high",
+      "status": "open",
+      "relates_to": [],
+      "time_estimate": null,
+      "completed_date": null
+    },
+    "task_6": {
+      "id": "task_6",
+      "type": "task",
+      "parent_id": "project_3",
+      "name": "Fix critical bug",
+      "description": "Production issue affecting users",
+      "target_date": "2026-03-31",
+      "priority": "high",
+      "status": "in_progress",
+      "time_estimate": 3,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "task_7": {
+      "id": "task_7",
+      "type": "task",
+      "parent_id": "project_3",
+      "name": "Client call",
+      "description": "Discuss requirements",
+      "target_date": "2026-03-31",
+      "priority": "medium",
+      "status": "open",
+      "time_estimate": 1,
+      "relates_to": [],
+      "completed_date": null
+    },
+    "task_8": {
+      "id": "task_8",
+      "type": "task",
+      "parent_id": "project_3",
+      "name": "Prepare report",
+      "description": "Weekly summary",
+      "target_date": "2026-04-01",
+      "priority": "medium",
+      "status": "open",
+      "time_estimate": 2,
+      "relates_to": [],
+      "completed_date": null
+    }
+  }
+}
