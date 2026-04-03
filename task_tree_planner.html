@@ -2236,18 +2236,19 @@
         const node = data.nodes[addState.editId];
         if (!node) return;
         const newStatus = document.getElementById('form-status').value;
+        const prevStatus = node.status;
         node.name = name;
         node.description = document.getElementById('form-description').value.trim();
         node.image = document.getElementById('form-image').value.trim() || null;
         node.priority = document.getElementById('form-priority').value;
+        node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
         node.status = newStatus;
         // Keep completed_date in sync with status
-        if (newStatus === 'done' && node.status !== 'done' && !node.completed_date) {
-          node.completed_date = dateKey(0);
+        if (newStatus === 'done' && prevStatus !== 'done') {
+          node.completed_date = node.target_date || dateKey(0);
         } else if (newStatus !== 'done') {
           node.completed_date = null;
         }
-        node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
         node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
         node.relates_to = selectedRelates();
         saveState();
