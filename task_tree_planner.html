@@ -99,6 +99,23 @@
       margin-bottom: 14px;
     }
 
+    .panel-header .collapse-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--muted);
+      padding: 2px 6px;
+      border-radius: 6px;
+      line-height: 1;
+      transition: background 0.15s;
+    }
+    .panel-header .collapse-btn:hover { background: #f3f4f6; }
+
+    .panel.done-collapsed .done-grid { display: none; }
+    .panel.done-collapsed .panel-header { margin-bottom: 0; }
+
     .count {
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -1038,8 +1055,9 @@
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Tasks Done</h2>
+        <h2 style="cursor:pointer" id="done-section-title">Tasks Done</h2>
         <span class="count" id="done-count">0</span>
+        <button class="collapse-btn" id="done-collapse-btn" title="Toggle done section">▾</button>
       </div>
       <div class="done-grid" id="done-list"></div>
     </section>
@@ -1589,6 +1607,34 @@
       }
       doneNodes.forEach(node => doneListEl.appendChild(miniCardDone(node)));
     }
+
+    // ── Done section collapse ─────────────────────────────────────────────────
+    const DONE_COLLAPSED_KEY = 'task-tree-done-collapsed';
+    const donePanel    = doneListEl.closest('.panel');
+    const doneColBtn   = document.getElementById('done-collapse-btn');
+    const doneSectionTitle = document.getElementById('done-section-title');
+
+    function setDoneCollapsed(collapsed) {
+      if (collapsed) {
+        donePanel.classList.add('done-collapsed');
+        doneColBtn.textContent = '▸';
+      } else {
+        donePanel.classList.remove('done-collapsed');
+        doneColBtn.textContent = '▾';
+      }
+      localStorage.setItem(DONE_COLLAPSED_KEY, collapsed ? '1' : '0');
+    }
+
+    function toggleDoneCollapsed() {
+      setDoneCollapsed(!donePanel.classList.contains('done-collapsed'));
+    }
+
+    doneColBtn.addEventListener('click', toggleDoneCollapsed);
+    doneSectionTitle.addEventListener('click', toggleDoneCollapsed);
+
+    // Default: collapsed (only override if user has explicitly expanded before)
+    const savedCollapsed = localStorage.getItem(DONE_COLLAPSED_KEY);
+    setDoneCollapsed(savedCollapsed === null ? true : savedCollapsed === '1');
 
     function createMenu(node, options = {}) {
       const { doneSection = false, allowAddChild = true, allowEdit = true, allowDelete = true } = options;
