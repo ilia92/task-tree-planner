@@ -15,12 +15,14 @@ Run:
 
 import hashlib
 import http.cookies
+import ipaddress
 import json
 import os
 import secrets
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from urllib.parse import unquote, urlparse, parse_qs
 from urllib.request import urlopen, Request
 
@@ -31,9 +33,45 @@ IMAGES_DIR         = os.path.join(BASE_DIR, "images")
 DATA_FILE          = os.path.join(BASE_DIR, "data.json")
 WEATHER_HISTORY_FILE = os.path.join(BASE_DIR, "weather_history.json")
 CONFIG_FILE        = os.path.join(BASE_DIR, "config.json")
+ALLOWLIST_FILE     = os.path.join(BASE_DIR, "allowlist.txt")
 
 SESSION_TTL        = 7 * 24 * 3600
 _sessions: dict    = {}
+
+# ── IP allowlist ──────────────────────────────────────────────────────────────
+
+def load_allowlist() -> list:
+    """
+    Load allowed CIDRs/IPs from allowlist.txt.
+    Lines starting with '#' and blank lines are ignored.
+    Returns a list of ip_network objects; empty list = allow all.
+    """
+    if not os.path.isfile(ALLOWLIST_FILE):
+        return []
+    nets = []
+    with open(ALLOWLIST_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                nets.append(ipaddress.ip_network(line, strict=False))
+            except ValueError:
+                print(f"  [allowlist] Invalid entry ignored: {line!r}")
+    print(f"  [allowlist] Loaded {len(nets)} networks from {ALLOWLIST_FILE}")
+    return nets
+
+_allowlist: list = []   # populated at startup; empty = disabled
+
+def is_allowed(ip: str) -> bool:
+    """Return True if allowlist is empty (disabled) or ip matches an entry."""
+    if not _allowlist:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _allowlist)
 
 
 def load_config() -> dict:
@@ -263,7 +301,7 @@ LOGIN_HTML = """<!DOCTYPE html>
     </div>
     <div class="form-field">
       <label for="pw">Password</label>
-      <input type="password" id="pw" placeholder="••••••••"
+      <input type="password" id="pw" placeholder="password"
              onkeydown="if(event.key==='Enter')login()"/>
     </div>
     <div class="error" id="err">Incorrect username or password.</div>
@@ -378,8 +416,17 @@ def parse_multipart(data: bytes, boundary: bytes):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionResetError, BrokenPipeError):
+            pass
+
     def log_message(self, fmt, *args):
         print(f"  {self.address_string()} {fmt % args}")
+
+    def _ip_allowed(self) -> bool:
+        return is_allowed(self.client_address[0])
 
     def _authed(self) -> bool:
         if not has_any_user():
@@ -400,6 +447,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if not self._ip_allowed():
+            self.send_error(403, "Forbidden")
+            return
+
         parsed = urlparse(self.path)
         path   = parsed.path
         qs     = parse_qs(parsed.query)
@@ -475,6 +526,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if not self._ip_allowed():
+            self.send_error(403, "Forbidden")
+            return
+
         length = int(self.headers.get("Content-Length", 0))
         body   = self.rfile.read(length)
 
@@ -547,6 +602,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
 
@@ -572,7 +631,12 @@ if __name__ == "__main__":
         print("   Starting anyway — all requests will be allowed.\n")
 
     os.makedirs(IMAGES_DIR, exist_ok=True)
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    _allowlist = load_allowlist()
+    if _allowlist:
+        print(f"  [allowlist] Active — {len(_allowlist)} networks")
+    else:
+        print("  [allowlist] Disabled (no allowlist.txt found — all IPs allowed)")
+    server = ThreadedHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"Task Tree Planner  ->  http://0.0.0.0:{PORT}")
     print(f"  data.json   : {DATA_FILE}")
     print(f"  config.json : {CONFIG_FILE}")
