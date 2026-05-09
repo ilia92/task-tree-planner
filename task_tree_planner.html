@@ -635,6 +635,13 @@
       color: #854d0e;
     }
 
+    .pill-time-done {
+      background: #dcfce7;
+      border-color: #4ade80;
+      color: #15803d;
+      font-variant-numeric: tabular-nums;
+    }
+
     .pill-time-scheduled {
       background: #f0fdf4;
       border-color: #86efac;
@@ -943,6 +950,64 @@
       color: #c2410c;
     }
 
+    /* ── Custom Date Picker ───────────────────────────────────────── */
+    .custom-date-picker {
+      position: fixed;
+      z-index: 600;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.16);
+      padding: 12px;
+      width: 232px;
+      display: none;
+      user-select: none;
+    }
+    .custom-date-picker.open { display: block; }
+    .cdp-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .cdp-nav-btn {
+      width: 28px; height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cdp-nav-btn:hover { background: #f3f4f6; }
+    .cdp-month-label { font-weight: 700; font-size: 13px; }
+    .cdp-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .cdp-dow {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 2px 0 4px;
+    }
+    .cdp-cell {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .cdp-cell:hover:not(.cdp-empty) { background: #f1f5f9; }
+    .cdp-cell.cdp-today { border: 1.5px solid var(--text); }
+    .cdp-cell.cdp-selected { background: var(--text); color: white !important; border-color: transparent; }
+    .cdp-cell.cdp-empty { cursor: default; }
+
     @media (max-width: 980px) {
       .lane-grid,
       .node-body,
@@ -1123,6 +1188,7 @@
       </div>
     </div>
   </div>
+  <div id="custom-date-picker" class="custom-date-picker"></div>
   <div class="kbd-hint" id="kbd-hint"></div>
   <script>
     const typeChildren = {
@@ -1441,6 +1507,25 @@
       return node.time_estimate || 0;
     }
 
+    // Returns {todo, done} split — done hours from completed subtrees, todo from the rest
+    function calcTimeSplit(node) {
+      const visibleChildren = (node.children || [])
+        .map(id => data.nodes[id])
+        .filter(Boolean)
+        .filter(c => !c.archived);
+      if (visibleChildren.length) {
+        let todo = 0, done = 0;
+        visibleChildren.forEach(c => {
+          const s = calcTimeSplit(c);
+          todo += s.todo;
+          done += s.done;
+        });
+        return { todo, done };
+      }
+      const t = node.time_estimate || 0;
+      return node.status === 'done' ? { todo: 0, done: t } : { todo: t, done: 0 };
+    }
+
     function formatTime(hours) {
       if (!hours) return null;
       if (hours < 1) return `${Math.round(hours * 60)}m`;
@@ -1450,15 +1535,25 @@
     }
 
     function timePillHtml(node) {
-      const hasOwnChildren = (node.children || []).length > 0;
-      const t = calcTime(node);
+      const activeChildren = (node.children || [])
+        .map(id => data.nodes[id])
+        .filter(Boolean)
+        .filter(c => !c.archived);
+      const hasOwnChildren = activeChildren.length > 0;
+
+      if (hasOwnChildren) {
+        const { todo, done } = calcTimeSplit(node);
+        let html = '';
+        if (done > 0) html += `<span class="pill pill-time-done" title="Done time">✅ ${escapeHtml(formatTime(done))}</span>`;
+        if (todo > 0) html += `<span class="pill pill-time-sum" title="Todo time">⏱ ${escapeHtml(formatTime(todo))}</span>`;
+        return html;
+      }
+
+      const t = node.time_estimate || 0;
       if (!t) return '';
       const label = formatTime(t);
       let cls, title;
-      if (hasOwnChildren) {
-        cls = 'pill pill-time-sum';
-        title = 'Sum of children';
-      } else if (node.target_date) {
+      if (node.target_date) {
         cls = 'pill pill-time-scheduled';
         title = 'Scheduled';
       } else {
@@ -1735,10 +1830,8 @@
         if (depth === 0) {
           const pills = document.createElement('div');
           pills.className = 'compact-child-pills';
-          const t = calcTime(child);
-          const timePill = t ? `<span class="pill ${(child.children||[]).length ? 'pill-time-sum' : (child.target_date ? 'pill-time-scheduled' : 'pill-time-unscheduled')}" title="Time">⏱ ${escapeHtml(formatTime(t))}</span>` : '';
           const datePill = datePillHtml(child);
-          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${timePill}${datePill}`;
+          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${timePillHtml(child)}${datePill}`;
           card.appendChild(pills);
         } else {
           // grandchild: show time + date inline if available
@@ -2343,23 +2436,120 @@
       if (e.target.id === 'modal-backdrop') closeAddDialog();
     });
 
-    // Calendar button: open the hidden date picker, sync value back as dd/mm/yyyy
-    document.getElementById('form-date-picker-btn').addEventListener('click', () => {
-      const picker = document.getElementById('form-target-date-picker');
-      // Seed picker with current text value if valid, clear first so re-picking same date fires change
+    // ── Custom Date Picker (Monday-first) ────────────────────────────────────
+    const cdpState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+    function renderCustomDatePicker(selectedIso) {
+      const picker = document.getElementById('custom-date-picker');
+      const { year, month } = cdpState;
+      const monthLabel = new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      const todayKey = dateKey(0);
+
+      let html = `
+        <div class="cdp-nav">
+          <button type="button" class="cdp-nav-btn" id="cdp-prev">‹</button>
+          <span class="cdp-month-label">${monthLabel}</span>
+          <button type="button" class="cdp-nav-btn" id="cdp-next">›</button>
+        </div>
+        <div class="cdp-grid">
+          <div class="cdp-dow">Mo</div><div class="cdp-dow">Tu</div><div class="cdp-dow">We</div>
+          <div class="cdp-dow">Th</div><div class="cdp-dow">Fr</div>
+          <div class="cdp-dow" style="color:#e11d48">Sa</div>
+          <div class="cdp-dow" style="color:#e11d48">Su</div>
+      `;
+
+      const firstDay = new Date(year, month, 1);
+      const startOffset = (firstDay.getDay() + 6) % 7; // Mon=0 … Sun=6
+      for (let i = 0; i < startOffset; i++) {
+        html += `<div class="cdp-cell cdp-empty"></div>`;
+      }
+
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7; // 0=Mon … 6=Sun
+        const isWeekend = dow >= 5;
+        let cls = 'cdp-cell';
+        if (iso === todayKey) cls += ' cdp-today';
+        if (iso === selectedIso) cls += ' cdp-selected';
+        const color = (!cls.includes('cdp-selected') && isWeekend) ? 'style="color:#e11d48"' : '';
+        html += `<div class="${cls}" data-iso="${iso}" ${color}>${d}</div>`;
+      }
+
+      html += `</div>`;
+      picker.innerHTML = html;
+      picker._selectedIso = selectedIso;
+
+      document.getElementById('cdp-prev').addEventListener('click', (e) => {
+        e.stopPropagation();
+        cdpState.month--;
+        if (cdpState.month < 0) { cdpState.month = 11; cdpState.year--; }
+        renderCustomDatePicker(picker._selectedIso);
+      });
+      document.getElementById('cdp-next').addEventListener('click', (e) => {
+        e.stopPropagation();
+        cdpState.month++;
+        if (cdpState.month > 11) { cdpState.month = 0; cdpState.year++; }
+        renderCustomDatePicker(picker._selectedIso);
+      });
+      picker.querySelectorAll('.cdp-cell[data-iso]').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const iso = cell.dataset.iso;
+          document.getElementById('form-target-date').value = toDisplayDate(iso);
+          closeCustomDatePicker();
+        });
+      });
+    }
+
+    function openCustomDatePicker(anchorBtn) {
+      const picker = document.getElementById('custom-date-picker');
       const cur = document.getElementById('form-target-date').value;
       const iso = toIsoDate(cur);
-      picker.value = iso || '';
-      if (typeof picker.showPicker === 'function') {
-        picker.showPicker();
+      if (iso) {
+        const d = new Date(iso + 'T12:00:00');
+        cdpState.year = d.getFullYear();
+        cdpState.month = d.getMonth();
       } else {
-        picker.click();
+        const now = new Date();
+        cdpState.year = now.getFullYear();
+        cdpState.month = now.getMonth();
+      }
+      renderCustomDatePicker(iso || null);
+      picker.classList.add('open');
+
+      // Position below the button, clamped to viewport
+      const rect = anchorBtn.getBoundingClientRect();
+      picker.style.left = rect.left + 'px';
+      picker.style.top = (rect.bottom + 6) + 'px';
+      const pw = picker.offsetWidth;
+      const ph = picker.offsetHeight;
+      let left = rect.left;
+      if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+      let top = rect.bottom + 6;
+      if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+      picker.style.left = Math.max(8, left) + 'px';
+      picker.style.top = Math.max(8, top) + 'px';
+    }
+
+    function closeCustomDatePicker() {
+      document.getElementById('custom-date-picker').classList.remove('open');
+    }
+
+    document.getElementById('form-date-picker-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const picker = document.getElementById('custom-date-picker');
+      if (picker.classList.contains('open')) {
+        closeCustomDatePicker();
+      } else {
+        openCustomDatePicker(e.currentTarget);
       }
     });
 
-    document.getElementById('form-target-date-picker').addEventListener('change', (e) => {
-      if (e.target.value) {
-        document.getElementById('form-target-date').value = toDisplayDate(e.target.value);
+    // Dismiss picker on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#custom-date-picker') && !e.target.closest('#form-date-picker-btn')) {
+        closeCustomDatePicker();
       }
     });
 
