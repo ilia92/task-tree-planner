@@ -2069,9 +2069,10 @@
       });
 
       // Day-of-week headers
-      ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(d => {
+      ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d, i) => {
         const el = document.createElement('div');
         el.className = 'cal-dow';
+        if (i >= 5) el.style.color = '#e11d48';
         el.textContent = d;
         grid.appendChild(el);
       });
@@ -2107,8 +2108,12 @@
         el.style.color = textDark ? 'white' : '#1e293b';
 
         // Day number — top-left corner when weather shown, centred otherwise
+        const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7; // Mon=0 … Sun=6
+        const isWeekend = dow >= 5;
         const numEl = document.createElement('div');
         numEl.className = 'cal-day-num';
+        if (isWeekend && !textDark) numEl.style.color = '#e11d48';
+        numEl.style.opacity = isWeekend && !textDark ? '1' : '';
         numEl.textContent = day;
         el.appendChild(numEl);
 
