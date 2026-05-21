@@ -1288,7 +1288,7 @@
     }
 
     let data = structuredClone(emptyData);
-    let addState = { open: false, anchorId: null, mode: 'child', editId: null };
+    let addState = { open: false, anchorId: null, mode: 'child', editId: null, overrideChildType: null };
     let openMenuId = null;
     let hoveredNodeId = null;
     let weatherByDate = {};   // iso → { emoji, label, temp_max, temp_min, precip, isHistory }
@@ -1782,6 +1782,22 @@
         addChildBtn.innerHTML = `<span aria-hidden="true" class="menu-icon">➕</span>New ${typeLabels[typeChildren[node.type]] || 'Child'}`;
         addChildBtn.addEventListener('click', () => openAddDialog(node.id, 'child'));
         menu.appendChild(addChildBtn);
+      }
+
+      // Space: also allow adding a Task directly (bypasses the project level)
+      if (allowAddChild && node.type === 'space') {
+        const addTaskBtn = document.createElement('button');
+        addTaskBtn.innerHTML = `<span aria-hidden="true" class="menu-icon">📋</span>New Task`;
+        addTaskBtn.addEventListener('click', () => openAddDialog(node.id, 'child', 'task'));
+        menu.appendChild(addTaskBtn);
+      }
+
+      // Project: also allow adding a Subtask directly
+      if (allowAddChild && node.type === 'project') {
+        const addSubtaskBtn = document.createElement('button');
+        addSubtaskBtn.innerHTML = `<span aria-hidden="true" class="menu-icon">📋</span>New Subtask`;
+        addSubtaskBtn.addEventListener('click', () => openAddDialog(node.id, 'child', 'subtask'));
+        menu.appendChild(addSubtaskBtn);
       }
 
       if (allowDelete) {
@@ -2286,11 +2302,11 @@
       });
     }
 
-    function openAddDialog(anchorId, mode) {
+    function openAddDialog(anchorId, mode, overrideChildType = null) {
       hidePeekPopup();
-      addState = { open: true, anchorId, mode, editId: null };
+      addState = { open: true, anchorId, mode, editId: null, overrideChildType };
       const anchor = data.nodes[anchorId];
-      const childType = anchor ? (typeChildren[anchor.type] || 'subtask') : 'subtask';
+      const childType = overrideChildType || (anchor ? (typeChildren[anchor.type] || 'subtask') : 'subtask');
       document.getElementById('modal-title').textContent = `Add ${typeLabels[childType] || childType}`;
       document.getElementById('form-name').value = '';
       document.getElementById('form-description').value = '';
@@ -2406,7 +2422,7 @@
       if (!anchor) return;
 
       const parentId = anchor.id;
-      const newType = typeChildren[anchor.type] || 'subtask';
+      const newType = addState.overrideChildType || typeChildren[anchor.type] || 'subtask';
       const newId = makeId(newType);
 
       data.nodes[newId] = {
