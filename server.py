@@ -26,14 +26,25 @@ from socketserver import ThreadingMixIn
 from urllib.parse import unquote, urlparse, parse_qs
 from urllib.request import urlopen, Request
 
-_MGMT_FLAGS = {"--setup", "--add-user", "--remove-user", "--list-users", "--update-user"}
-PORT               = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] not in _MGMT_FLAGS else 8000
+_MGMT_FLAGS        = {"--setup", "--add-user", "--remove-user", "--list-users", "--update-user"}
 BASE_DIR           = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE        = os.path.join(BASE_DIR, "config.json")
 IMAGES_DIR         = os.path.join(BASE_DIR, "images")
 DATA_FILE          = os.path.join(BASE_DIR, "data.json")
 WEATHER_HISTORY_FILE = os.path.join(BASE_DIR, "weather_history.json")
-CONFIG_FILE        = os.path.join(BASE_DIR, "config.json")
 ALLOWLIST_FILE     = os.path.join(BASE_DIR, "allowlist.txt")
+
+# Read config early so PORT and INSTANCE_NAME are available at module level
+_STARTUP_CFG: dict = {}
+try:
+    with open(CONFIG_FILE) as _f:
+        _STARTUP_CFG = json.load(_f)
+except Exception:
+    pass
+
+PORT          = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] not in _MGMT_FLAGS \
+                else _STARTUP_CFG.get("port", 8000)
+INSTANCE_NAME = _STARTUP_CFG.get("instance_name", "Task Tree Planner")
 
 SESSION_TTL        = 7 * 24 * 3600
 _sessions: dict    = {}
@@ -463,6 +474,10 @@ class Handler(BaseHTTPRequestHandler):
             self._redirect_login()
             return
 
+        if path == "/api/instance":
+            self._json(200, {"instance_name": INSTANCE_NAME})
+            return
+
         if path == "/geolocate":
             geo = geolocate_by_ip()
             if geo: self._json(200, {"ok": True, **geo})
@@ -637,7 +652,7 @@ if __name__ == "__main__":
     else:
         print("  [allowlist] Disabled (no allowlist.txt found — all IPs allowed)")
     server = ThreadedHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Task Tree Planner  ->  http://0.0.0.0:{PORT}")
+    print(f"Task Tree Planner [{INSTANCE_NAME}]  ->  http://0.0.0.0:{PORT}")
     print(f"  data.json   : {DATA_FILE}")
     print(f"  config.json : {CONFIG_FILE}")
     print(f"  images/     : {IMAGES_DIR}")

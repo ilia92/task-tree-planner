@@ -19,7 +19,21 @@ set -euo pipefail
 # ── Config ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$SCRIPT_DIR/data.json"
-BACKUP_ROOT="$(dirname "$SCRIPT_DIR")/backups"
+
+# Resolve backup root from config.json; fall back to ../backup_ttp_<instance_name>
+BACKUP_ROOT=$(python3 - <<EOF
+import json, os, sys
+script_dir = '$SCRIPT_DIR'
+try:
+    cfg  = json.load(open(os.path.join(script_dir, 'config.json')))
+    name = cfg.get('instance_name', 'ttp').lower().replace(' ', '_')
+    bd   = cfg.get('backup_dir', f'../backup_ttp_{name}')
+    print(os.path.normpath(os.path.join(script_dir, bd)))
+except Exception as e:
+    print(os.path.normpath(os.path.join(script_dir, '../backups')), file=sys.stderr)
+    sys.exit(1)
+EOF
+) || BACKUP_ROOT="$(dirname "$SCRIPT_DIR")/backups"
 
 # ── Sanity check ─────────────────────────────────────────────────────────────
 if [[ ! -f "$SOURCE" ]]; then

@@ -88,6 +88,12 @@ python server.py --list-users      # show all usernames
 python server.py 9000
 ```
 
+Port can also be set in `config.json` (CLI argument takes priority):
+
+```json
+{ "port": 9000 }
+```
+
 ---
 
 ## File structure
@@ -97,19 +103,52 @@ task-tree-planner/
 ├── task_tree_planner.html   # The entire frontend
 ├── server.py                # Minimal Python HTTP server
 ├── backup_tasks.sh          # Hourly backup script (optional)
+├── config.json.example      # Config template — copy to config.json and edit
 ├── data.json                # Your task data (created on first save)
 └── images/                  # Uploaded images (created automatically)
 ```
 
-Backups are stored one directory up:
+Backups are stored one directory up (path is configurable via `config.json`):
 
 ```
-../backups/
+../backup_ttp_personal/
   2026/
     04-April/
       2026-04-01_14-00.json
       2026-04-01_18-00.json
 ```
+
+---
+
+## Multi-instance & config.json
+
+Copy `config.json.example` to `config.json` and edit to taste. All keys are optional — defaults are used for anything omitted.
+
+```json
+{
+  "instance_name": "Personal",
+  "port": 8000,
+  "backup_dir": "../backup_ttp_personal"
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `instance_name` | `"Task Tree Planner"` | Shown in the browser tab title |
+| `port` | `8000` | Port the server listens on (CLI arg overrides this) |
+| `backup_dir` | `../backup_ttp_<instance>` | Where `backup_tasks.sh` writes backups (relative to the instance directory, or absolute) |
+
+To run two instances side by side, clone the repo twice into separate directories, give each a different `instance_name` and `port` in its `config.json`, and start both servers:
+
+```bash
+# Terminal 1 — Personal
+cd ~/task-tree-planner-personal && python server.py
+
+# Terminal 2 — Work
+cd ~/task-tree-planner-work && python server.py
+```
+
+Each instance has its own `data.json`, `config.json`, `images/`, and backup directory.
 
 ---
 

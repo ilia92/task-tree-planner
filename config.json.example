@@ -1,0 +1,8 @@
+{
+  "instance_name": "Personal",
+  "port": 8000,
+  "backup_dir": "../backup_ttp_personal",
+  "users": {
+    "alice": "<sha256-password-hash>"
+  }
+}

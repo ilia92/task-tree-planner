@@ -1035,7 +1035,7 @@
   <div class="container">
     <div class="topbar">
       <div>
-        <h1><svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><rect x="13" y="22" width="6" height="9" rx="1" fill="#7c3f00"/><polygon points="16,1 4,13 28,13" fill="#22c55e"/><polygon points="16,8 3,19 29,19" fill="#16a34a"/><polygon points="16,14 2,25 30,25" fill="#15803d"/></svg>Task Tree Planner</h1>
+        <h1><svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><rect x="13" y="22" width="6" height="9" rx="1" fill="#7c3f00"/><polygon points="16,1 4,13 28,13" fill="#22c55e"/><polygon points="16,8 3,19 29,19" fill="#16a34a"/><polygon points="16,14 2,25 30,25" fill="#15803d"/></svg><span id="instance-prefix" style="display:none"></span>Task Tree Planner</h1>
         <p class="subtle">Plain HTML + JS. JSON-backed. Compact/expanded hierarchy, done lane, and add-from-box workflow.</p>
       </div>
       <div class="actions">
@@ -2760,8 +2760,22 @@
       document.getElementById('cal-expand').title = isExpanded ? 'Collapse calendar' : 'Expand calendar';
     });
 
+    async function initInstance() {
+      if (!IS_HTTP) return;
+      try {
+        const { instance_name } = await fetch('/api/instance').then(r => r.json());
+        if (instance_name && instance_name !== 'Task Tree Planner') {
+          document.title = instance_name + ' — Task Tree Planner';
+          const prefix = document.getElementById('instance-prefix');
+          prefix.textContent = instance_name + ' · ';
+          prefix.style.display = '';
+        }
+      } catch {}
+    }
+
     initData();
     initWeather();
+    initInstance();
   </script>
 </body>
 </html>
