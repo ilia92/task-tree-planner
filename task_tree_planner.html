@@ -253,6 +253,12 @@
       color: #15803d;
     }
 
+    .status-wont_do {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #64748b;
+    }
+
     .node-body {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1106,6 +1112,7 @@
             <option value="in_progress" selected>In progress</option>
             <option value="blocked">Blocked</option>
             <option value="done">Done</option>
+            <option value="wont_do">Won't do</option>
           </select>
           <select id="filter-priority" class="filter-select">
             <option value="">— All priorities —</option>
@@ -1130,7 +1137,7 @@
 
     <section class="panel">
       <div class="panel-header">
-        <h2 style="cursor:pointer" id="done-section-title">Tasks Done</h2>
+        <h2 style="cursor:pointer" id="done-section-title">Completed Tasks</h2>
         <span class="count" id="done-count">0</span>
         <button class="collapse-btn" id="done-collapse-btn" title="Toggle done section">▾</button>
       </div>
@@ -1170,6 +1177,7 @@
             <option value="in_progress">in_progress</option>
             <option value="blocked">blocked</option>
             <option value="done">done</option>
+            <option value="wont_do">won't do</option>
           </select>
         </div>
         <div class="form-field">
@@ -1389,7 +1397,7 @@
       // Add burger menu in the node-head
       const head = popup.querySelector('.node-head');
       if (head) {
-        head.appendChild(createMenu(node, { doneSection: node.status === 'done', allowAddChild: true, allowEdit: true, allowDelete: true }));
+        head.appendChild(createMenu(node, { doneSection: isResolved(node.status), allowAddChild: true, allowEdit: true, allowDelete: true }));
       }
 
       popup.classList.add('visible');
@@ -1460,12 +1468,14 @@
       return `${day}/${month}/${year}`;
     }
 
+    function isResolved(status) { return status === 'done' || status === 'wont_do'; }
+
     function getOpenNodes() {
-      return Object.values(data.nodes).filter(node => !node.archived && node.status !== 'done');
+      return Object.values(data.nodes).filter(node => !node.archived && !isResolved(node.status));
     }
 
     function getDoneNodes() {
-      return Object.values(data.nodes).filter(node => !node.archived && node.status === 'done');
+      return Object.values(data.nodes).filter(node => !node.archived && isResolved(node.status));
     }
 
     function dateKey(offsetDays = 0) {
@@ -1520,6 +1530,7 @@
     // Hours for a done node: only direct time_estimate if it has children (avoids double-counting
     // with children that may also appear in the calendar individually)
     function doneNodeHours(n) {
+      if (n.status === 'wont_do') return 0;
       const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
       return hasChildren ? (n.time_estimate || 0) : (n.time_estimate || calcTime(n) || 0);
     }
@@ -1540,7 +1551,9 @@
         return { todo, done };
       }
       const t = node.time_estimate || 0;
-      return node.status === 'done' ? { todo: 0, done: t } : { todo: t, done: 0 };
+      if (node.status === 'done') return { todo: 0, done: t };
+      if (node.status === 'wont_do') return { todo: 0, done: 0 };
+      return { todo: t, done: 0 };
     }
 
     function formatTime(hours) {
@@ -1656,8 +1669,9 @@
         if (pillsRow) {
           const badge = document.createElement('span');
           badge.className = 'pill pill-completed-date';
-          badge.title = 'Completed on';
-          badge.textContent = `✓ ${formatDate(node.completed_date)}`;
+          const icon = node.status === 'wont_do' ? '⛔' : '✓';
+          badge.title = node.status === 'wont_do' ? 'Won\'t do — resolved on' : 'Completed on';
+          badge.textContent = `${icon} ${formatDate(node.completed_date)}`;
           pillsRow.appendChild(badge);
         }
       }
@@ -1677,8 +1691,8 @@
       const tomorrowItems = openNodes.filter(node => node.target_date === tomorrow);
 
       // Completed today / tomorrow (by completed_date)
-      const doneTodayItems    = allNodes.filter(n => n.status === 'done' && n.completed_date === today);
-      const doneTomorrowItems = allNodes.filter(n => n.status === 'done' && n.completed_date === tomorrow);
+      const doneTodayItems    = allNodes.filter(n => isResolved(n.status) && n.completed_date === today);
+      const doneTomorrowItems = allNodes.filter(n => isResolved(n.status) && n.completed_date === tomorrow);
 
       // Overdue panel
       overdueListEl.innerHTML = '';
@@ -1772,7 +1786,7 @@
       const menu = document.createElement('div');
       menu.className = 'menu';
 
-      if (!doneSection && node.status !== 'done') {
+      if (!doneSection && !isResolved(node.status)) {
         const completeBtn = document.createElement('button');
         completeBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">✅</span>Complete';
         completeBtn.addEventListener('click', () => {
@@ -1785,6 +1799,19 @@
           render();
         });
         menu.appendChild(completeBtn);
+
+        const wontDoBtn = document.createElement('button');
+        wontDoBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">⛔</span>Won\'t do';
+        wontDoBtn.addEventListener('click', () => {
+          if (!window.confirm(`Mark "${data.nodes[node.id].name}" as won't do?`)) return;
+          data.nodes[node.id].status = 'wont_do';
+          data.nodes[node.id].collapsed = true;
+          data.nodes[node.id].completed_date = dateKey(0);
+          openMenuId = null;
+          saveState();
+          render();
+        });
+        menu.appendChild(wontDoBtn);
       }
 
       if (allowEdit) {
@@ -1834,7 +1861,7 @@
       const visibleChildren = (node.children || [])
         .map(id => data.nodes[id])
         .filter(Boolean)
-        .filter(c => !c.archived && c.status !== 'done');
+        .filter(c => !c.archived && !isResolved(c.status));
 
       if (!visibleChildren.length) return null;
 
@@ -2027,7 +2054,7 @@
         const visibleChildren = (node.children || [])
           .map(id => data.nodes[id])
           .filter(Boolean)
-          .filter(child => !child.archived && child.status !== 'done');
+          .filter(child => !child.archived && !isResolved(child.status));
 
         if (visibleChildren.length) {
           const childrenEl = document.createElement('div');
@@ -2044,7 +2071,7 @@
       rootsEl.innerHTML = '';
       (data.settings.root_ids || []).forEach(id => {
         const node = data.nodes[id];
-        if (!node || node.archived || node.status === 'done') return;
+        if (!node || node.archived || isResolved(node.status)) return;
         rootsEl.appendChild(renderNode(node));
       });
     }
@@ -2084,7 +2111,7 @@
       Object.values(data.nodes).forEach(node => {
         if (node.archived) return;
         // Scheduled (open/future) nodes by target_date
-        if (node.target_date && node.status !== 'done') {
+        if (node.target_date && !isResolved(node.status)) {
           const d = new Date(node.target_date + 'T12:00:00');
           if (d.getFullYear() === year && d.getMonth() === month) {
             if (!nodesByDay[node.target_date]) nodesByDay[node.target_date] = [];
@@ -2092,7 +2119,7 @@
           }
         }
         // Completed nodes by completed_date
-        if (node.completed_date && node.status === 'done') {
+        if (node.completed_date && isResolved(node.status)) {
           const d = new Date(node.completed_date + 'T12:00:00');
           if (d.getFullYear() === year && d.getMonth() === month) {
             if (!completedByDay[node.completed_date]) completedByDay[node.completed_date] = [];
@@ -2169,8 +2196,8 @@
           if (wx.isHistory) el.style.opacity = '0.75';
         }
 
-        const doneProjects = doneNodes.filter(n => n.type === 'project');
-        const doneSpaces = doneNodes.filter(n => n.type === 'space');
+        const doneProjects = doneNodes.filter(n => n.type === 'project' && n.status === 'done');
+        const doneSpaces = doneNodes.filter(n => n.type === 'space' && n.status === 'done');
         const badgeParts = [];
         if (doneProjects.length) badgeParts.push(doneProjects.length === 1 ? '🏆' : `🏆${doneProjects.length}`);
         if (doneSpaces.length) badgeParts.push(doneSpaces.length === 1 ? '💎' : `💎${doneSpaces.length}`);
@@ -2448,9 +2475,9 @@
         node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
         node.status = newStatus;
         // Keep completed_date in sync with status
-        if (newStatus === 'done' && prevStatus !== 'done') {
+        if (isResolved(newStatus) && !isResolved(prevStatus)) {
           node.completed_date = node.target_date || dateKey(0);
-        } else if (newStatus !== 'done') {
+        } else if (!isResolved(newStatus)) {
           node.completed_date = null;
         }
         node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
