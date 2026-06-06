@@ -820,6 +820,15 @@
       opacity: 0.85;
     }
 
+    .cal-done-badge {
+      position: absolute;
+      bottom: 3px;
+      right: 4px;
+      font-size: clamp(11px, 1.5vw, 15px);
+      line-height: 1;
+      opacity: 0.85;
+    }
+
     /* Day with no weather — just show the number centred */
     .cal-day.no-weather {
       justify-content: center;
@@ -1074,6 +1083,7 @@
       <section class="panel" id="cal-panel">
         <div class="panel-header">
           <h2>Schedule</h2>
+          <div id="cal-summary" style="display:none;flex-wrap:wrap;gap:4px;flex:1;"></div>
           <div class="cal-nav">
             <button class="cal-nav-btn" id="cal-prev">‹</button>
             <span class="cal-month-label" id="cal-month-label"></span>
@@ -1505,6 +1515,13 @@
         return sum;
       }
       return node.time_estimate || 0;
+    }
+
+    // Hours for a done node: only direct time_estimate if it has children (avoids double-counting
+    // with children that may also appear in the calendar individually)
+    function doneNodeHours(n) {
+      const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
+      return hasChildren ? (n.time_estimate || 0) : (n.time_estimate || calcTime(n) || 0);
     }
 
     // Returns {todo, done} split — done hours from completed subtrees, todo from the rest
@@ -2084,6 +2101,8 @@
         }
       });
 
+      let monthDoneHours = 0, monthTodoHours = 0;
+
       // Day-of-week headers
       ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d, i) => {
         const el = document.createElement('div');
@@ -2110,7 +2129,9 @@
         const nodes = nodesByDay[iso] || [];
         const doneNodes = completedByDay[iso] || [];
         const totalHours = nodes.reduce((acc, n) => acc + (n.time_estimate || calcTime(n) || 0), 0);
-        const doneHours = doneNodes.reduce((acc, n) => acc + (n.time_estimate || calcTime(n) || 0), 0);
+        const doneHours = doneNodes.reduce((acc, n) => acc + doneNodeHours(n), 0);
+        monthDoneHours += doneHours;
+        monthTodoHours += totalHours;
         const wx = weatherByDate[iso];
 
         // Past days: colour by completed work (green). Future/today: colour by scheduled load (orange/red)
@@ -2148,6 +2169,18 @@
           if (wx.isHistory) el.style.opacity = '0.75';
         }
 
+        const doneProjects = doneNodes.filter(n => n.type === 'project');
+        const doneSpaces = doneNodes.filter(n => n.type === 'space');
+        const badgeParts = [];
+        if (doneProjects.length) badgeParts.push(doneProjects.length === 1 ? '🏆' : `🏆${doneProjects.length}`);
+        if (doneSpaces.length) badgeParts.push(doneSpaces.length === 1 ? '💎' : `💎${doneSpaces.length}`);
+        if (badgeParts.length) {
+          const badge = document.createElement('div');
+          badge.className = 'cal-done-badge';
+          badge.textContent = badgeParts.join(' ');
+          el.appendChild(badge);
+        }
+
         // Tooltip on hover
         el.addEventListener('mouseenter', (e) => {
           const tip = document.getElementById('cal-tooltip');
@@ -2171,9 +2204,11 @@
           if (isPast && doneNodes.length) {
             html += `<div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:4px;">✓ Completed</div>`;
             html += doneNodes.map(n => {
-              const t = n.time_estimate || calcTime(n);
+              const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
+              const t = doneNodeHours(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
+              const prefix = hasChildren ? '📁 ' : '';
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}</div>`;
             }).join('');
             if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
@@ -2215,6 +2250,15 @@
 
         grid.appendChild(el);
       }
+
+      // Month summary pills
+      const summaryEl = document.getElementById('cal-summary');
+      let summaryHtml = '';
+      if (monthDoneHours) summaryHtml += `<span class="pill pill-time-done">✅ ${formatTime(monthDoneHours)}</span>`;
+      if (monthTodoHours) summaryHtml += `<span class="pill pill-time-sum">⏱ ${formatTime(monthTodoHours)}</span>`;
+      summaryEl.innerHTML = summaryHtml;
+      summaryEl.style.display = summaryHtml ? 'flex' : 'none';
+      summaryEl.style.alignItems = 'center';
     }
 
     function renderFilter() {
