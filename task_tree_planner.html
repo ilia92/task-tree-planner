@@ -2154,6 +2154,7 @@
       });
 
       let monthDoneHours = 0, monthTodoHours = 0;
+      const monthDoneByUser = {};
 
       // Day-of-week headers
       ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d, i) => {
@@ -2184,6 +2185,10 @@
         const doneHours = doneNodes.reduce((acc, n) => acc + doneNodeHours(n), 0);
         monthDoneHours += doneHours;
         monthTodoHours += totalHours;
+        doneNodes.forEach(n => {
+          const u = n.completed_by || '?';
+          monthDoneByUser[u] = (monthDoneByUser[u] || 0) + doneNodeHours(n);
+        });
         const wx = weatherByDate[iso];
 
         // Past days: colour by completed work (green). Future/today: colour by scheduled load (orange/red)
@@ -2259,8 +2264,9 @@
               const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
               const t = doneNodeHours(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
+              const byStr = n.completed_by ? ` <span style="color:var(--muted);font-size:10px;">· ${escapeHtml(n.completed_by)}</span>` : '';
               const prefix = hasChildren ? '📁 ' : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}</div>`;
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</div>`;
             }).join('');
             if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
@@ -2308,6 +2314,10 @@
       let summaryHtml = '';
       if (monthDoneHours) summaryHtml += `<span class="pill pill-time-done">✅ ${formatTime(monthDoneHours)}</span>`;
       if (monthTodoHours) summaryHtml += `<span class="pill pill-time-sum">⏱ ${formatTime(monthTodoHours)}</span>`;
+      Object.entries(monthDoneByUser).sort((a, b) => b[1] - a[1]).forEach(([u, h]) => {
+        const hStr = h ? ` · ${formatTime(h)}` : '';
+        summaryHtml += `<span class="pill" style="background:#f0f9ff;border-color:#7dd3fc;color:#0369a1;font-size:11px;">${escapeHtml(u)}${hStr}</span>`;
+      });
       summaryEl.innerHTML = summaryHtml;
       summaryEl.style.display = summaryHtml ? 'flex' : 'none';
       summaryEl.style.alignItems = 'center';
