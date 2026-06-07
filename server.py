@@ -203,22 +203,27 @@ def list_users():
         print()
 
 
-def create_session() -> str:
+def create_session(username: str) -> str:
     token = secrets.token_hex(32)
-    _sessions[token] = time.time() + SESSION_TTL
+    _sessions[token] = {"expires": time.time() + SESSION_TTL, "username": username}
     return token
 
 
 def validate_session(token) -> bool:
     if not token:
         return False
-    expires = _sessions.get(token)
-    if not expires:
+    entry = _sessions.get(token)
+    if not entry:
         return False
-    if time.time() > expires:
+    if time.time() > entry["expires"]:
         del _sessions[token]
         return False
     return True
+
+
+def get_session_username(token) -> str:
+    entry = _sessions.get(token)
+    return entry["username"] if entry else ""
 
 
 def get_session_token(headers):
@@ -478,6 +483,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"instance_name": INSTANCE_NAME})
             return
 
+        if path == "/api/me":
+            token    = get_session_token(self.headers)
+            username = get_session_username(token) if token else ""
+            self._json(200, {"username": username})
+            return
+
         if path == "/geolocate":
             geo = geolocate_by_ip()
             if geo: self._json(200, {"ok": True, **geo})
@@ -557,7 +568,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"ok": False, "error": "Bad request"}); return
 
             if check_credentials(username, pw):
-                token  = create_session()
+                token  = create_session(username.strip().lower())
                 cookie = http.cookies.SimpleCookie()
                 cookie["session"] = token
                 cookie["session"]["httponly"] = True

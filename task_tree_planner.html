@@ -1138,6 +1138,7 @@
     <section class="panel">
       <div class="panel-header">
         <h2 style="cursor:pointer" id="done-section-title">Completed Tasks</h2>
+        <div id="done-user-summary" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
         <span class="count" id="done-count">0</span>
         <button class="collapse-btn" id="done-collapse-btn" title="Toggle done section">▾</button>
       </div>
@@ -1307,6 +1308,7 @@
 
     let data = structuredClone(emptyData);
     let addState = { open: false, anchorId: null, mode: 'child', editId: null, overrideChildType: null };
+    let currentUser = '';
     let openMenuId = null;
     let hoveredNodeId = null;
     let weatherByDate = {};   // iso → { emoji, label, temp_max, temp_min, precip, isHistory }
@@ -1671,7 +1673,8 @@
           badge.className = 'pill pill-completed-date';
           const icon = node.status === 'wont_do' ? '⛔' : '✓';
           badge.title = node.status === 'wont_do' ? 'Won\'t do — resolved on' : 'Completed on';
-          badge.textContent = `${icon} ${formatDate(node.completed_date)}`;
+          const byStr = node.completed_by ? ` · ${node.completed_by}` : '';
+          badge.textContent = `${icon} ${formatDate(node.completed_date)}${byStr}`;
           pillsRow.appendChild(badge);
         }
       }
@@ -1727,6 +1730,26 @@
       const doneNodes = getDoneNodes();
       doneListEl.innerHTML = '';
       doneCountEl.textContent = String(doneNodes.length);
+
+      // Per-user summary pills
+      const summaryEl = document.getElementById('done-user-summary');
+      summaryEl.innerHTML = '';
+      const byUser = {};
+      doneNodes.forEach(n => {
+        const u = n.completed_by || '?';
+        if (!byUser[u]) byUser[u] = { count: 0, hours: 0 };
+        byUser[u].count++;
+        byUser[u].hours += doneNodeHours(n);
+      });
+      Object.entries(byUser).sort((a, b) => b[1].hours - a[1].hours).forEach(([u, s]) => {
+        const pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.style.cssText = 'background:#f0f9ff;border-color:#7dd3fc;color:#0369a1;font-size:11px;';
+        const hoursStr = s.hours ? ` · ${formatTime(s.hours)}` : '';
+        pill.textContent = `${u}: ${s.count}${hoursStr}`;
+        summaryEl.appendChild(pill);
+      });
+
       if (!doneNodes.length) {
         doneListEl.innerHTML = '<div class="empty">Nothing completed yet.</div>';
         return;
@@ -1794,6 +1817,7 @@
           data.nodes[node.id].status = 'done';
           data.nodes[node.id].collapsed = true;
           data.nodes[node.id].completed_date = dateKey(0);
+          data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
           saveState();
           render();
@@ -1807,6 +1831,7 @@
           data.nodes[node.id].status = 'wont_do';
           data.nodes[node.id].collapsed = true;
           data.nodes[node.id].completed_date = dateKey(0);
+          data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
           saveState();
           render();
@@ -2477,8 +2502,10 @@
         // Keep completed_date in sync with status
         if (isResolved(newStatus) && !isResolved(prevStatus)) {
           node.completed_date = node.target_date || dateKey(0);
+          node.completed_by = currentUser || null;
         } else if (!isResolved(newStatus)) {
           node.completed_date = null;
+          node.completed_by = null;
         }
         node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
         node.relates_to = selectedRelates();
@@ -2790,13 +2817,18 @@
     async function initInstance() {
       if (!IS_HTTP) return;
       try {
-        const { instance_name } = await fetch('/api/instance').then(r => r.json());
+        const [instRes, meRes] = await Promise.all([
+          fetch('/api/instance').then(r => r.json()),
+          fetch('/api/me').then(r => r.json()),
+        ]);
+        const { instance_name } = instRes;
         if (instance_name && instance_name !== 'Task Tree Planner') {
           document.title = instance_name + ' — Task Tree Planner';
           const prefix = document.getElementById('instance-prefix');
           prefix.textContent = instance_name + ' · ';
           prefix.style.display = '';
         }
+        if (meRes.username) currentUser = meRes.username;
       } catch {}
     }
 
