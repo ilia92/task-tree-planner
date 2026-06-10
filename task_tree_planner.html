@@ -772,9 +772,23 @@
 
     .cal-grid {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: auto repeat(7, 1fr);
       gap: 4px;
       margin-top: 12px;
+    }
+
+    .cal-cw {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      opacity: 0.6;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-right: 2px;
+      user-select: none;
     }
 
     .cal-dow {
@@ -2156,7 +2170,22 @@
       let monthDoneHours = 0, monthTodoHours = 0;
       const monthDoneByUser = {};
 
-      // Day-of-week headers
+      function isoWeek(date) {
+        const d = new Date(date); d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        return Math.ceil(((d - new Date(d.getFullYear(), 0, 1)) / 86400000 + 1) / 7);
+      }
+      function addCWCell(wn) {
+        const cw = document.createElement('div');
+        cw.className = 'cal-cw';
+        cw.textContent = `CW${wn}`;
+        grid.appendChild(cw);
+      }
+
+      // Day-of-week headers — leading empty corner for CW column
+      const corner = document.createElement('div');
+      corner.className = 'cal-cw';
+      grid.appendChild(corner);
       ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d, i) => {
         const el = document.createElement('div');
         el.className = 'cal-dow';
@@ -2168,6 +2197,8 @@
       const firstDay = new Date(year, month, 1);
       // Monday-based: Sun=6, Mon=0 … Sat=5
       let startOffset = (firstDay.getDay() + 6) % 7;
+      // CW for the first (possibly partial) week
+      addCWCell(isoWeek(firstDay));
       for (let i = 0; i < startOffset; i++) {
         const blank = document.createElement('div');
         blank.className = 'cal-day empty-slot';
@@ -2179,6 +2210,8 @@
 
       for (let day = 1; day <= daysInMonth; day++) {
         const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7; // Mon=0
+        if (dow === 0 && day > 1) addCWCell(isoWeek(new Date(iso + 'T12:00:00')));
         const nodes = nodesByDay[iso] || [];
         const doneNodes = completedByDay[iso] || [];
         const totalHours = nodes.reduce((acc, n) => acc + (n.time_estimate || calcTime(n) || 0), 0);
@@ -2202,7 +2235,6 @@
         el.style.color = textDark ? 'white' : '#1e293b';
 
         // Day number — top-left corner when weather shown, centred otherwise
-        const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7; // Mon=0 … Sun=6
         const isWeekend = dow >= 5;
         const numEl = document.createElement('div');
         numEl.className = 'cal-day-num';
