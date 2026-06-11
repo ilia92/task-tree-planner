@@ -18,6 +18,7 @@ import http.cookies
 import ipaddress
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -48,6 +49,8 @@ INSTANCE_NAME = _STARTUP_CFG.get("instance_name", "Task Tree Planner")
 
 SESSION_TTL        = 7 * 24 * 3600
 _sessions: dict    = {}
+_safe_instance     = re.sub(r'[^a-zA-Z0-9]', '_', INSTANCE_NAME)
+COOKIE_NAME        = f"session_{_safe_instance}_{PORT}"  # instance+port scoped so multi-instance deployments don't clobber each other's cookies
 
 # ── IP allowlist ──────────────────────────────────────────────────────────────
 
@@ -232,7 +235,7 @@ def get_session_token(headers):
         return None
     c = http.cookies.SimpleCookie()
     c.load(raw)
-    m = c.get("session")
+    m = c.get(COOKIE_NAME)
     return m.value if m else None
 
 
@@ -570,14 +573,14 @@ class Handler(BaseHTTPRequestHandler):
             if check_credentials(username, pw):
                 token  = create_session(username.strip().lower())
                 cookie = http.cookies.SimpleCookie()
-                cookie["session"] = token
-                cookie["session"]["httponly"] = True
-                cookie["session"]["samesite"] = "Strict"
-                cookie["session"]["max-age"]  = SESSION_TTL
-                cookie["session"]["path"]     = "/"
+                cookie[COOKIE_NAME] = token
+                cookie[COOKIE_NAME]["httponly"] = True
+                cookie[COOKIE_NAME]["samesite"] = "Strict"
+                cookie[COOKIE_NAME]["max-age"]  = SESSION_TTL
+                cookie[COOKIE_NAME]["path"]     = "/"
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Set-Cookie", cookie["session"].OutputString())
+                self.send_header("Set-Cookie", cookie[COOKIE_NAME].OutputString())
                 self.end_headers()
                 self.wfile.write(b'{"ok":true}')
                 print(f"  [auth] Login successful: '{username}' from {self.address_string()}")
