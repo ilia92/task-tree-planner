@@ -932,7 +932,7 @@
     .peek-popup {
       position: fixed;
       z-index: 9999;
-      pointer-events: auto;
+      pointer-events: none;
       width: min(480px, 90vw);
       background: white;
       border-radius: var(--radius);
@@ -942,7 +942,7 @@
       opacity: 0;
       transition: opacity 0.15s;
     }
-    .peek-popup.visible { opacity: 1; }
+    .peek-popup.visible { opacity: 1; pointer-events: auto; }
 
     .kbd-hint {
       position: fixed;
@@ -1830,7 +1830,7 @@
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
           data.nodes[node.id].status = 'done';
           data.nodes[node.id].collapsed = true;
-          data.nodes[node.id].completed_date = dateKey(0);
+          data.nodes[node.id].completed_date = data.nodes[node.id].target_date || dateKey(0);
           data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
           saveState();
@@ -1844,7 +1844,7 @@
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as won't do?`)) return;
           data.nodes[node.id].status = 'wont_do';
           data.nodes[node.id].collapsed = true;
-          data.nodes[node.id].completed_date = dateKey(0);
+          data.nodes[node.id].completed_date = data.nodes[node.id].target_date || dateKey(0);
           data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
           saveState();
