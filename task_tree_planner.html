@@ -12,10 +12,16 @@
       --text: #111827;
       --muted: #6b7280;
       --line: #d1d5db;
-      --low: #cbd5e1;
-      --medium: #10b981;
-      --high: #f59e0b;
-      --very-high: #ef4444;
+      --p1: #cbd5e1;
+      --p2: #8dccc1;
+      --p3: #4ec2a1;
+      --p4: #10b981;
+      --p5: #5cb05a;
+      --p6: #a9a732;
+      --p7: #f59e0b;
+      --p8: #f3801e;
+      --p9: #f16231;
+      --p10: #ef4444;
       --done-bg: #e5e7eb;
       --done-text: #6b7280;
       --radius: 18px;
@@ -167,10 +173,16 @@
     }
 
     .children > .node-wrap > .node-card::before { display: block; }
-    .priority-very_high { border-color: var(--very-high); }
-    .priority-high { border-color: var(--high); }
-    .priority-medium { border-color: var(--medium); }
-    .priority-low { border-color: var(--low); }
+    .priority-p1 { border-color: var(--p1); }
+    .priority-p2 { border-color: var(--p2); }
+    .priority-p3 { border-color: var(--p3); }
+    .priority-p4 { border-color: var(--p4); }
+    .priority-p5 { border-color: var(--p5); }
+    .priority-p6 { border-color: var(--p6); }
+    .priority-p7 { border-color: var(--p7); }
+    .priority-p8 { border-color: var(--p8); }
+    .priority-p9 { border-color: var(--p9); }
+    .priority-p10 { border-color: var(--p10); }
 
     .priority-dot {
       width: 10px;
@@ -181,10 +193,16 @@
       flex: 0 0 auto;
     }
 
-    .dot-very_high { background: var(--very-high); }
-    .dot-high { background: var(--high); }
-    .dot-medium { background: var(--medium); }
-    .dot-low { background: #94a3b8; }
+    .dot-p1 { background: var(--p1); }
+    .dot-p2 { background: var(--p2); }
+    .dot-p3 { background: var(--p3); }
+    .dot-p4 { background: var(--p4); }
+    .dot-p5 { background: var(--p5); }
+    .dot-p6 { background: var(--p6); }
+    .dot-p7 { background: var(--p7); }
+    .dot-p8 { background: var(--p8); }
+    .dot-p9 { background: var(--p9); }
+    .dot-p10 { background: var(--p10); }
 
     .node-head {
       display: flex;
@@ -290,10 +308,16 @@
       font-size: 13px;
     }
 
-    .compact-child-card.priority-very_high { border-color: var(--very-high); }
-    .compact-child-card.priority-high      { border-color: var(--high); }
-    .compact-child-card.priority-medium    { border-color: var(--medium); }
-    .compact-child-card.priority-low       { border-color: var(--low); }
+    .compact-child-card.priority-p1  { border-color: var(--p1); }
+    .compact-child-card.priority-p2  { border-color: var(--p2); }
+    .compact-child-card.priority-p3  { border-color: var(--p3); }
+    .compact-child-card.priority-p4  { border-color: var(--p4); }
+    .compact-child-card.priority-p5  { border-color: var(--p5); }
+    .compact-child-card.priority-p6  { border-color: var(--p6); }
+    .compact-child-card.priority-p7  { border-color: var(--p7); }
+    .compact-child-card.priority-p8  { border-color: var(--p8); }
+    .compact-child-card.priority-p9  { border-color: var(--p9); }
+    .compact-child-card.priority-p10 { border-color: var(--p10); }
 
     .compact-child-name {
       font-weight: 700;
@@ -324,10 +348,16 @@
       font-weight: 600;
     }
 
-    .compact-grandchild-card.priority-very_high { border-color: var(--very-high); }
-    .compact-grandchild-card.priority-high      { border-color: var(--high); }
-    .compact-grandchild-card.priority-medium    { border-color: var(--medium); }
-    .compact-grandchild-card.priority-low       { border-color: var(--low); }
+    .compact-grandchild-card.priority-p1  { border-color: var(--p1); }
+    .compact-grandchild-card.priority-p2  { border-color: var(--p2); }
+    .compact-grandchild-card.priority-p3  { border-color: var(--p3); }
+    .compact-grandchild-card.priority-p4  { border-color: var(--p4); }
+    .compact-grandchild-card.priority-p5  { border-color: var(--p5); }
+    .compact-grandchild-card.priority-p6  { border-color: var(--p6); }
+    .compact-grandchild-card.priority-p7  { border-color: var(--p7); }
+    .compact-grandchild-card.priority-p8  { border-color: var(--p8); }
+    .compact-grandchild-card.priority-p9  { border-color: var(--p9); }
+    .compact-grandchild-card.priority-p10 { border-color: var(--p10); }
 
     /* Expand button sits where the burger was */
     .expand-btn {
@@ -349,14 +379,14 @@
     /* ── Overdue panel ────────────────────────────────────────────── */
     .overdue-panel {
       background: var(--panel);
-      border: 2px solid var(--very-high);
+      border: 2px solid var(--p10);
       border-radius: 24px;
       box-shadow: var(--shadow);
       padding: 18px;
       margin-bottom: 18px;
     }
 
-    .overdue-panel .panel-header h2 { color: var(--very-high); }
+    .overdue-panel .panel-header h2 { color: var(--p10); }
 
     .menu-wrap { position: relative; z-index: 30; }
 
@@ -443,6 +473,13 @@
     }
 
     .form-field.full { grid-column: 1 / -1; }
+
+    .move-type-row { flex-direction: row; gap: 14px; }
+    .move-type-row #form-parent-field { flex: 3 1 0%; min-width: 0; }
+    .move-type-row #form-type-field { flex: 1 1 0%; min-width: 120px; }
+
+    .order-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .order-controls .btn:disabled { opacity: 0.45; cursor: default; }
 
     .form-field input,
     .form-field textarea,
@@ -576,16 +613,36 @@
     .relates-checkbox-list {
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 10px 12px;
-      max-height: 180px;
+      max-height: 220px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 6px;
       background: white;
     }
 
-    .relates-checkbox-list label {
+    .relates-search-input {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      outline: none;
+      background: white;
+      font: inherit;
+      flex: 0 0 auto;
+    }
+
+    .relates-search-input:focus { border-color: #3b82f6; }
+
+    .relates-checkbox-items {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 12px;
+    }
+
+    .relates-checkbox-items label {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -594,7 +651,7 @@
       padding: 3px 0;
     }
 
-    .relates-checkbox-list input[type=checkbox] {
+    .relates-checkbox-items input[type=checkbox] {
       width: 16px;
       height: 16px;
       flex: 0 0 auto;
@@ -602,6 +659,77 @@
     }
 
     .relates-empty { color: var(--muted); font-size: 13px; padding: 4px 0; }
+
+    /* Move-to combo: a closed select-like trigger that expands into a popup —
+       search box on top, scrollable option list below. */
+    .combo { position: relative; }
+
+    .combo-trigger {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: white;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .combo-trigger:hover { border-color: #94a3b8; }
+    .combo-trigger .combo-trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .combo-trigger .combo-arrow { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+
+    .combo-popup {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .combo.open .combo-popup { display: flex; }
+
+    .combo-filter-input {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      outline: none;
+      background: white;
+      font: inherit;
+    }
+
+    .combo-filter-input:focus { border-color: #3b82f6; }
+
+    .combo-options {
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .combo-option {
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .combo-option:hover { background: #f3f4f6; }
+    .combo-option.selected { background: #eef2ff; font-weight: 600; }
+    .combo-option.active { box-shadow: inset 0 0 0 2px #3b82f6; }
+    .combo-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
 
     /* Compact button — sits left of burger in expanded cards */
     .compact-btn {
@@ -936,7 +1064,7 @@
       width: min(480px, 90vw);
       background: white;
       border-radius: var(--radius);
-      border: 2px solid var(--medium);
+      border: 2px solid var(--p4);
       box-shadow: 0 16px 48px rgba(0,0,0,0.22);
       padding: 16px;
       opacity: 0;
@@ -1128,13 +1256,7 @@
             <option value="done">Done</option>
             <option value="wont_do">Won't do</option>
           </select>
-          <select id="filter-priority" class="filter-select">
-            <option value="">— All priorities —</option>
-            <option value="very_high">Very high</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+          <select id="filter-priority" class="filter-select"></select>
           <span class="count" id="filter-count">0</span>
         </div>
       </div>
@@ -1144,7 +1266,7 @@
     <section class="panel tree-wrap">
       <div class="panel-header">
         <h2>Main Tree</h2>
-        <div class="legend">Very high = red, high = orange, medium = green, low = gray</div>
+        <div class="legend">Priority 1 (Low) → 10 (Very High): color shifts gray → green → orange → red</div>
       </div>
       <div class="roots" id="roots"></div>
     </section>
@@ -1174,16 +1296,39 @@
         </div>
         <div class="form-field full">
           <label>Relates to</label>
-          <div id="form-relates-wrap" class="relates-checkbox-list"></div>
+          <div class="relates-checkbox-list">
+            <input id="form-relates-search" type="text" placeholder="Search…" class="relates-search-input" autocomplete="off" />
+            <div id="form-relates-wrap" class="relates-checkbox-items"></div>
+          </div>
+        </div>
+        <div class="form-field full move-type-row">
+          <div class="form-field" id="form-parent-field" style="display:none;">
+            <label>Move to</label>
+            <div class="combo" id="form-parent-combo">
+              <button type="button" class="combo-trigger" id="form-parent-trigger">
+                <span class="combo-trigger-label" id="form-parent-trigger-label"></span>
+                <span class="combo-arrow">▾</span>
+              </button>
+              <div class="combo-popup">
+                <input id="form-parent-filter" type="text" class="combo-filter-input" placeholder="Search…" autocomplete="off" />
+                <div class="combo-options" id="form-parent-options"></div>
+              </div>
+            </div>
+            <input type="hidden" id="form-parent" />
+          </div>
+          <div class="form-field" id="form-type-field" style="display:none;">
+            <label>Type</label>
+            <select id="form-type">
+              <option value="space">Space</option>
+              <option value="project">Project</option>
+              <option value="task">Task</option>
+              <option value="subtask">Subtask</option>
+            </select>
+          </div>
         </div>
         <div class="form-field">
           <label>Priority</label>
-          <select id="form-priority">
-            <option value="very_high">very_high</option>
-            <option value="high">high</option>
-            <option value="medium" selected>medium</option>
-            <option value="low">low</option>
-          </select>
+          <select id="form-priority"></select>
         </div>
         <div class="form-field">
           <label>Status</label>
@@ -1214,6 +1359,14 @@
           <input id="form-image" type="text" placeholder="images/example.png" />
           <div id="form-image-preview" class="subtle">Select an image — it will be uploaded to images/ on the server automatically.</div>
         </div>
+        <div class="form-field" id="form-order-field" style="display:none;">
+          <label>Position among siblings</label>
+          <div class="order-controls">
+            <button type="button" class="btn" id="form-order-up">▲ Move up</button>
+            <button type="button" class="btn" id="form-order-down">▼ Move down</button>
+            <span class="subtle" id="form-order-label"></span>
+          </div>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn" id="modal-cancel">Cancel</button>
@@ -1238,11 +1391,53 @@
       subtask: 'Subtask'
     };
 
+    // Linear type ladder used to elevate/lower a node's type. subtask is the floor
+    // (typeChildren.subtask === 'subtask' already reflects that self-loop); space is the ceiling.
+    const typeOrder = ['space', 'project', 'task', 'subtask'];
+    const ROOT_SENTINEL = '__root__';
+
+    // Shifts node's type to newType, and — when cascade is true — shifts every descendant's
+    // type by the same number of ladder steps, clamped to the space..subtask range.
+    function changeNodeType(node, newType, cascade) {
+      const delta = typeOrder.indexOf(newType) - typeOrder.indexOf(node.type);
+      node.type = newType;
+      if (!cascade || !delta) return;
+      collectDescendants(node.id, []).forEach(id => {
+        if (id === node.id) return;
+        const desc = data.nodes[id];
+        if (!desc) return;
+        const depth = Math.min(typeOrder.length - 1, Math.max(0, typeOrder.indexOf(desc.type) + delta));
+        desc.type = typeOrder[depth];
+      });
+    }
+
     const emptyData = {
       version: 1,
       settings: { images_dir: 'images/', root_ids: [] },
       nodes: {}
     };
+
+    // ── Priority (1-10, with legacy VH/H/M/L labels anchored at 10/7/4/1) ──────
+    const priorityAnchorLabels = { 1: 'Low', 4: 'Medium', 7: 'High', 10: 'Very High' };
+    function priorityLabel(n) {
+      const anchor = priorityAnchorLabels[n];
+      return anchor ? `${n} (${anchor})` : `${n}`;
+    }
+    function populatePriorityOptions(selectEl, { includeAll = false } = {}) {
+      selectEl.innerHTML = '';
+      if (includeAll) {
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = '— All priorities —';
+        selectEl.appendChild(optAll);
+      }
+      for (let n = 1; n <= 10; n++) {
+        const opt = document.createElement('option');
+        opt.value = String(n);
+        opt.textContent = priorityLabel(n);
+        selectEl.appendChild(opt);
+      }
+    }
 
     // ── Save indicator ───────────────────────────────────────────────────────
     function showSaveIndicator(ok) {
@@ -1456,6 +1651,8 @@
     const filterListEl = document.getElementById('filter-list');
     const filterCountEl = document.getElementById('filter-count');
 
+    const legacyPriorityMap = { very_high: 10, high: 7, medium: 4, low: 1 };
+
     function migrateData() {
       Object.values(data.nodes || {}).forEach(node => {
         if (Array.isArray(node.depends_on) && !Array.isArray(node.relates_to)) {
@@ -1465,6 +1662,11 @@
         if (!Array.isArray(node.relates_to)) node.relates_to = [];
         if (node.time_estimate === undefined) node.time_estimate = null;
         if (node.completed_date === undefined) node.completed_date = null;
+        if (typeof node.priority === 'string' && legacyPriorityMap[node.priority] != null) {
+          node.priority = legacyPriorityMap[node.priority];
+        }
+        const p = Number(node.priority);
+        node.priority = (Number.isInteger(p) && p >= 1 && p <= 10) ? p : 4;
       });
     }
 
@@ -1630,7 +1832,7 @@
             <div class="node-head">
               <div class="node-head-left">
                 <div class="node-name-row">
-                  <span class="priority-dot dot-${node.priority || 'low'}"></span>
+                  <span class="priority-dot dot-p${node.priority || 1}"></span>
                   <div class="node-title">${escapeHtml(node.name)}</div>
                 </div>
                 <div class="node-pills-row">
@@ -1662,7 +1864,7 @@
       const wrapper = document.createElement('div');
       wrapper.className = 'node-wrap';
       const card = document.createElement('div');
-      card.className = `node-card priority-${node.priority || 'low'}`;
+      card.className = `node-card priority-p${node.priority || 1}`;
       card.innerHTML = renderNodeCardContent(node);
       const head = card.querySelector('.node-head');
       head.appendChild(createMenu(node, { doneSection: false, allowAddChild: true, allowEdit: true, allowDelete: false }));
@@ -1678,7 +1880,7 @@
       xEl.textContent = '×';
       wrap.appendChild(xEl);
       const card = document.createElement('div');
-      card.className = `done-card node-card priority-${node.priority || 'low'}`;
+      card.className = `done-card node-card priority-p${node.priority || 1}`;
       card.innerHTML = renderNodeCardContent(node);
       if (node.completed_date) {
         const pillsRow = card.querySelector('.node-pills-row');
@@ -1910,7 +2112,7 @@
       visibleChildren.forEach(child => {
         const card = document.createElement('div');
         card.className = (depth === 0 ? 'compact-child-card' : 'compact-grandchild-card')
-          + ` priority-${child.priority || 'low'}`;
+          + ` priority-p${child.priority || 1}`;
         card.style.cursor = 'default';
 
         // Click to peek on each child card
@@ -2016,7 +2218,7 @@
 
       if (node.collapsed) {
         // ── Compact mode ──
-        card.className = `node-card is-compact priority-${node.priority || 'low'}`;
+        card.className = `node-card is-compact priority-p${node.priority || 1}`;
 
         const head = document.createElement('div');
         head.className = 'node-head';
@@ -2027,7 +2229,7 @@
 
         const nameRow = document.createElement('div');
         nameRow.className = 'node-name-row';
-        nameRow.innerHTML = `<span class="priority-dot dot-${node.priority || 'low'}"></span><div class="node-title">${escapeHtml(node.name)}</div>`;
+        nameRow.innerHTML = `<span class="priority-dot dot-p${node.priority || 1}"></span><div class="node-title">${escapeHtml(node.name)}</div>`;
         headLeft.appendChild(nameRow);
 
         const pillsRow = document.createElement('div');
@@ -2071,7 +2273,7 @@
 
       } else {
         // ── Expanded mode ──
-        card.className = `node-card priority-${node.priority || 'low'}`;
+        card.className = `node-card priority-p${node.priority || 1}`;
         card.innerHTML = renderNodeCardContent(node);
 
         const head = card.querySelector('.node-head');
@@ -2298,7 +2500,7 @@
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
               const byStr = n.completed_by ? ` <span style="color:var(--muted);font-size:10px;">· ${escapeHtml(n.completed_by)}</span>` : '';
               const prefix = hasChildren ? '📁 ' : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</div>`;
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</div>`;
             }).join('');
             if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
@@ -2308,7 +2510,7 @@
             html += nodes.map(n => {
               const t = n.time_estimate || calcTime(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-${n.priority||'low'}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
+              return `<div class="cal-tooltip-task"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
             }).join('');
             if (!isPast && totalHours) html += `<div class="cal-tooltip-time">Total: ${formatTime(totalHours)}</div>`;
           }
@@ -2362,7 +2564,7 @@
 
       const matched = allNodes.filter(n => {
         if (status   && n.status   !== status)   return false;
-        if (priority && n.priority !== priority) return false;
+        if (priority && String(n.priority) !== priority) return false;
         return true;
       });
 
@@ -2434,10 +2636,119 @@
         cb.checked = current.includes(n.id);
         const span = document.createElement('span');
         span.textContent = `${n.name} (${typeLabels[n.type] || n.type})`;
+        label.dataset.searchText = n.name.toLowerCase();
         label.appendChild(cb);
         label.appendChild(span);
         wrap.appendChild(label);
       });
+    }
+
+    function filterRelatesOptions(term) {
+      const q = term.trim().toLowerCase();
+      // visibility (not display) so filtered-out rows keep their space — the list
+      // doesn't reflow/resize (and shrink the modal) as the search narrows results.
+      document.querySelectorAll('#form-relates-wrap label').forEach(label => {
+        label.style.visibility = !q || (label.dataset.searchText || '').includes(q) ? 'visible' : 'hidden';
+      });
+    }
+
+    // Move-to now allows relocating a node under ANY other node (or to the top level,
+    // alongside Spaces in the Main Tree) — type no longer restricts valid targets.
+    // Candidates are cached on the select element for the search box to re-filter from.
+    function parentOptionLabel(value) {
+      if (value === ROOT_SENTINEL) return '— Top level (Main Tree) —';
+      const n = data.nodes[value];
+      return n ? `${typeLabels[n.type] || n.type}: ${n.name}` : '';
+    }
+
+    function updateParentTriggerLabel() {
+      const current = document.getElementById('form-parent').value;
+      document.getElementById('form-parent-trigger-label').textContent = parentOptionLabel(current);
+    }
+
+    function openParentCombo() {
+      document.getElementById('form-parent-combo').classList.add('open');
+      const filterEl = document.getElementById('form-parent-filter');
+      filterEl.value = '';
+      renderParentOptions('');
+      filterEl.focus();
+    }
+
+    function closeParentCombo() {
+      document.getElementById('form-parent-combo').classList.remove('open');
+    }
+
+    // Move-to is a closed select-like trigger; clicking it opens a popup with a
+    // search box on top and the scrollable option list below, like a searchable dropdown.
+    function populateParentSelect(node) {
+      const fieldEl = document.getElementById('form-parent-field');
+      const optionsEl = document.getElementById('form-parent-options');
+      const excluded = new Set(collectDescendants(node.id, []));
+      optionsEl._candidates = Object.values(data.nodes).filter(n => !excluded.has(n.id));
+      document.getElementById('form-parent').value = node.parent_id || ROOT_SENTINEL;
+      closeParentCombo();
+      updateParentTriggerLabel();
+      fieldEl.style.display = '';
+    }
+
+    function renderParentOptions(term) {
+      const optionsEl = document.getElementById('form-parent-options');
+      const selected = document.getElementById('form-parent').value;
+      const q = term.trim().toLowerCase();
+      optionsEl.innerHTML = '';
+
+      if (!q || '— top level (main tree) —'.includes(q)) {
+        const rootRow = document.createElement('div');
+        rootRow.className = 'combo-option' + (selected === ROOT_SENTINEL ? ' selected' : '');
+        rootRow.textContent = '— Top level (Main Tree) —';
+        rootRow.dataset.value = ROOT_SENTINEL;
+        optionsEl.appendChild(rootRow);
+      }
+
+      (optionsEl._candidates || []).forEach(n => {
+        if (q && !n.name.toLowerCase().includes(q)) return;
+        const row = document.createElement('div');
+        row.className = 'combo-option' + (selected === n.id ? ' selected' : '');
+        row.textContent = `${typeLabels[n.type] || n.type}: ${n.name}`;
+        row.dataset.value = n.id;
+        optionsEl.appendChild(row);
+      });
+
+      if (!optionsEl.children.length) {
+        const empty = document.createElement('div');
+        empty.className = 'combo-empty';
+        empty.textContent = 'No matches.';
+        optionsEl.appendChild(empty);
+        return;
+      }
+
+      // First match is the default keyboard/Enter candidate — matches typical
+      // autocomplete behavior, so typing + Enter selects the top result immediately.
+      optionsEl.querySelector('.combo-option').classList.add('active');
+    }
+
+    function getActiveParentRow() {
+      return document.querySelector('#form-parent-options .combo-option.active');
+    }
+
+    function moveParentActive(delta) {
+      const rows = Array.from(document.querySelectorAll('#form-parent-options .combo-option'));
+      if (!rows.length) return;
+      const current = getActiveParentRow();
+      let idx = current ? rows.indexOf(current) : -1;
+      idx = (idx + delta + rows.length) % rows.length;
+      rows.forEach(r => r.classList.remove('active'));
+      rows[idx].classList.add('active');
+      rows[idx].scrollIntoView({ block: 'nearest' });
+    }
+
+    function chooseParentOption(row) {
+      if (!row) return;
+      const hiddenEl = document.getElementById('form-parent');
+      hiddenEl.value = row.dataset.value;
+      hiddenEl.dispatchEvent(new Event('change'));
+      updateParentTriggerLabel();
+      closeParentCombo();
     }
 
     function openAddDialog(anchorId, mode, overrideChildType = null) {
@@ -2449,7 +2760,15 @@
       document.getElementById('form-name').value = '';
       document.getElementById('form-description').value = '';
       populateRelatesSelect(null);
-      document.getElementById('form-priority').value = 'medium';
+      document.getElementById('form-relates-search').value = '';
+      document.getElementById('form-parent').value = '';
+      document.getElementById('form-parent-options').innerHTML = '';
+      document.getElementById('form-parent-trigger-label').textContent = '';
+      closeParentCombo();
+      document.getElementById('form-parent-field').style.display = 'none';
+      document.getElementById('form-type-field').style.display = 'none';
+      document.getElementById('form-order-field').style.display = 'none';
+      document.getElementById('form-priority').value = '4';
       document.getElementById('form-status').value = 'open';
       document.getElementById('form-target-date').value = '';
       document.getElementById('form-time').value = '';
@@ -2470,7 +2789,13 @@
       document.getElementById('form-name').value = node.name || '';
       document.getElementById('form-description').value = node.description || '';
       populateRelatesSelect(nodeId);
-      document.getElementById('form-priority').value = node.priority || 'medium';
+      document.getElementById('form-relates-search').value = '';
+      populateParentSelect(node);
+      document.getElementById('form-type-field').style.display = '';
+      document.getElementById('form-type').value = node.type;
+      document.getElementById('form-order-field').style.display = '';
+      updateOrderControls(node);
+      document.getElementById('form-priority').value = String(node.priority || 4);
       document.getElementById('form-status').value = node.status || 'open';
       document.getElementById('form-target-date').value = toDisplayDate(node.target_date);
       document.getElementById('form-time').value = node.time_estimate != null ? node.time_estimate : '';
@@ -2493,6 +2818,62 @@
       result.push(nodeId);
       (node.children || []).forEach(childId => collectDescendants(childId, result));
       return result;
+    }
+
+    // The ordered sibling array a node currently lives in — its parent's children,
+    // or data.settings.root_ids for a top-level (space) node.
+    function siblingsArrayFor(node) {
+      if (node.parent_id && data.nodes[node.parent_id]) {
+        const parent = data.nodes[node.parent_id];
+        if (!parent.children) parent.children = [];
+        return parent.children;
+      }
+      if (!data.settings.root_ids) data.settings.root_ids = [];
+      return data.settings.root_ids;
+    }
+
+    // A parent's children array can mix types — e.g. a Task added directly under a
+    // Space via the "New Task" bypass shortcut sits in the same array as its Projects.
+    // Position/reorder should only rank a node among same-type entries, ignoring any
+    // interleaved different-type items. Returns the raw sibling array plus the raw-array
+    // positions of just the same-type entries (in raw order).
+    function typedSiblingInfo(node) {
+      const arr = siblingsArrayFor(node);
+      const typedIdx = [];
+      arr.forEach((id, i) => {
+        const n = data.nodes[id];
+        if (n && n.type === node.type) typedIdx.push(i);
+      });
+      return { arr, typedIdx };
+    }
+
+    function updateOrderControls(node) {
+      const { arr, typedIdx } = typedSiblingInfo(node);
+      const pos = typedIdx.indexOf(arr.indexOf(node.id));
+      document.getElementById('form-order-label').textContent = `${pos + 1} of ${typedIdx.length}`;
+      document.getElementById('form-order-up').disabled = pos <= 0;
+      document.getElementById('form-order-down').disabled = pos === -1 || pos >= typedIdx.length - 1;
+    }
+
+    function moveSibling(nodeId, delta) {
+      const node = data.nodes[nodeId];
+      if (!node) return;
+      const { arr, typedIdx } = typedSiblingInfo(node);
+      const rawIdx = arr.indexOf(nodeId);
+      const pos = typedIdx.indexOf(rawIdx);
+      const targetPos = pos + delta;
+      if (pos === -1 || targetPos < 0 || targetPos >= typedIdx.length) return;
+      const targetRawIdx = typedIdx[targetPos];
+
+      // Relocate the node to sit next to its target same-type neighbor, shifting any
+      // interleaved different-type items out of the way rather than a plain 2-slot swap.
+      arr.splice(rawIdx, 1);
+      const adjustedTarget = rawIdx < targetRawIdx ? targetRawIdx - 1 : targetRawIdx;
+      arr.splice(delta > 0 ? adjustedTarget + 1 : adjustedTarget, 0, nodeId);
+
+      saveState();
+      render();
+      updateOrderControls(node);
     }
 
     function deleteNodeWithChildren(nodeId) {
@@ -2538,7 +2919,7 @@
         node.name = name;
         node.description = document.getElementById('form-description').value.trim();
         node.image = document.getElementById('form-image').value.trim() || null;
-        node.priority = document.getElementById('form-priority').value;
+        node.priority = Number(document.getElementById('form-priority').value);
         node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
         node.status = newStatus;
         // Keep completed_date in sync with status
@@ -2551,6 +2932,42 @@
         }
         node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
         node.relates_to = selectedRelates();
+
+        const newParentValue = document.getElementById('form-parent').value;
+        const currentParentValue = node.parent_id || ROOT_SENTINEL;
+        if (newParentValue && newParentValue !== currentParentValue) {
+          const oldParent = data.nodes[node.parent_id];
+          if (oldParent) {
+            oldParent.children = (oldParent.children || []).filter(id => id !== node.id);
+          } else {
+            data.settings.root_ids = (data.settings.root_ids || []).filter(id => id !== node.id);
+          }
+          if (newParentValue === ROOT_SENTINEL) {
+            if (!data.settings.root_ids) data.settings.root_ids = [];
+            data.settings.root_ids.push(node.id);
+            node.parent_id = null;
+          } else {
+            const newParent = data.nodes[newParentValue];
+            if (newParent) {
+              newParent.children = newParent.children || [];
+              newParent.children.push(node.id);
+              newParent.collapsed = false;
+              node.parent_id = newParentValue;
+            }
+          }
+        }
+
+        const newType = document.getElementById('form-type').value;
+        if (newType && newType !== node.type) {
+          const descCount = collectDescendants(node.id, []).length - 1;
+          const msg = descCount > 0
+            ? `Change "${node.name}" from ${typeLabels[node.type]} to ${typeLabels[newType]}? This will also update ${descCount} nested item(s) to keep the hierarchy consistent.`
+            : `Change "${node.name}" from ${typeLabels[node.type]} to ${typeLabels[newType]}?`;
+          if (window.confirm(msg)) {
+            changeNodeType(node, newType, true);
+          }
+        }
+
         saveState();
         closeAddDialog();
         render();
@@ -2574,7 +2991,7 @@
         image: document.getElementById('form-image').value.trim() || null,
         children: [],
         collapsed: false,
-        priority: document.getElementById('form-priority').value,
+        priority: Number(document.getElementById('form-priority').value),
         status: document.getElementById('form-status').value,
         target_date: toIsoDate(document.getElementById('form-target-date').value) || null,
         time_estimate: parseFloat(document.getElementById('form-time').value) || null,
@@ -2595,6 +3012,45 @@
     document.getElementById('modal-add').addEventListener('click', addNode);
     document.getElementById('modal-backdrop').addEventListener('click', (e) => {
       if (e.target.id === 'modal-backdrop') closeAddDialog();
+    });
+
+    document.getElementById('form-relates-search').addEventListener('input', (e) => {
+      filterRelatesOptions(e.target.value);
+    });
+    document.getElementById('form-parent-trigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const combo = document.getElementById('form-parent-combo');
+      if (combo.classList.contains('open')) closeParentCombo();
+      else openParentCombo();
+    });
+    document.getElementById('form-parent-filter').addEventListener('input', (e) => {
+      renderParentOptions(e.target.value);
+    });
+    document.getElementById('form-parent-filter').addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeParentCombo(); document.getElementById('form-parent-trigger').focus(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveParentActive(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveParentActive(-1); return; }
+      if (e.key === 'Enter') { e.preventDefault(); chooseParentOption(getActiveParentRow()); return; }
+    });
+    document.getElementById('form-parent-options').addEventListener('click', (e) => {
+      chooseParentOption(e.target.closest('.combo-option'));
+    });
+    document.addEventListener('click', (e) => {
+      const combo = document.getElementById('form-parent-combo');
+      if (combo.classList.contains('open') && !combo.contains(e.target)) closeParentCombo();
+    });
+    document.getElementById('form-order-up').addEventListener('click', () => {
+      if (addState.editId) moveSibling(addState.editId, -1);
+    });
+    document.getElementById('form-order-down').addEventListener('click', () => {
+      if (addState.editId) moveSibling(addState.editId, 1);
+    });
+    // Moving to a new parent (or to the top level) suggests the type that fits there —
+    // user can still override it before saving.
+    document.getElementById('form-parent').addEventListener('change', (e) => {
+      const val = e.target.value;
+      const suggested = val === ROOT_SENTINEL ? 'space' : (typeChildren[data.nodes[val]?.type] || null);
+      if (suggested) document.getElementById('form-type').value = suggested;
     });
 
     // ── Custom Date Picker (Monday-first) ────────────────────────────────────
@@ -2776,7 +3232,7 @@
         image: null,
         children: [],
         collapsed: false,
-        priority: 'medium',
+        priority: 4,
         status: 'open',
         target_date: null,
         time_estimate: null,
@@ -2874,6 +3330,8 @@
       } catch {}
     }
 
+    populatePriorityOptions(document.getElementById('filter-priority'), { includeAll: true });
+    populatePriorityOptions(document.getElementById('form-priority'));
     initData();
     initWeather();
     initInstance();

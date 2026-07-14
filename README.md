@@ -27,7 +27,7 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 - Date tag visible on every card (e.g. `31. Mar`)
 
 ### 🎨 Visual design
-- Priority-coloured card borders: very high (red), high (orange), medium (green), low (grey)
+- Priority-coloured card borders: 1-10 scale (1 = Low, 4 = Medium, 7 = High, 10 = Very High), color gradient from grey through green and orange to red
 - Status pills: open, in_progress, blocked, done
 - Image thumbnails with hover popup zoom
 - Done tasks shown greyed-out with strikethrough and a × watermark
@@ -37,6 +37,8 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 - Burger menu (☰) on every card: Edit, Complete, Add child, Delete
 - Peek popup on click for compact cards — full card info without expanding
 - Bidirectional relations between tasks
+- **Reorganize from the Edit dialog**: move an item under any other parent (or to the top level), change its type (Space/Project/Task/Subtask — optionally cascading to nested items), and reorder it up/down among same-type siblings
+- Searchable "Move to" and "Relates to" pickers — type to filter; in "Move to", use ↑ / ↓ / Enter to navigate and pick a match without the mouse
 
 ### 💾 Data
 - All data saved to `data.json` alongside the HTML (auto-save on every change)
@@ -244,7 +246,7 @@ sudo systemctl enable --now task-planner
       "type": "space",
       "name": "My Space",
       "status": "open",
-      "priority": "high",
+      "priority": 7,
       "target_date": "2026-04-15",
       "time_estimate": null,
       "children": ["project_1"],
