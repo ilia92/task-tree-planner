@@ -838,6 +838,16 @@
       position: relative;
     }
 
+    .fixed-date-check {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .fixed-date-check input { width: 15px; height: 15px; cursor: pointer; }
+
     .date-text-input {
       flex: 1;
       border: 1px solid var(--line);
@@ -903,6 +913,13 @@
       grid-template-columns: auto repeat(7, 1fr);
       gap: 4px;
       margin-top: 12px;
+    }
+
+    .cal-bulk-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
     }
 
     .cal-cw {
@@ -996,6 +1013,8 @@
 
     .cal-day:hover { transform: scale(1.18); z-index: 2; }
     .cal-day.today { border-color: var(--text); }
+    .cal-day.reserved { opacity: 0.7; }
+    .cal-day.reserved.today { opacity: 1; }
     .cal-day.empty-slot { background: transparent; cursor: default; }
     .cal-day.empty-slot:hover { transform: none; }
 
@@ -1030,7 +1049,7 @@
       padding: 12px 14px;
       min-width: 200px;
       max-width: 300px;
-      pointer-events: none;
+      pointer-events: auto;
       font-size: 13px;
     }
 
@@ -1044,11 +1063,34 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 3px 0;
+      padding: 3px 2px;
       border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      border-radius: 6px;
     }
 
+    .cal-tooltip-task:hover { background: #f3f4f6; }
     .cal-tooltip-task:last-child { border-bottom: none; }
+    .cal-tooltip-task-name { flex: 1 1 auto; min-width: 0; }
+
+    .cal-tooltip-locked {
+      flex: 0 0 auto;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .cal-tooltip-reserved {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .cal-tooltip-reserved input { width: 14px; height: 14px; cursor: pointer; }
 
     .cal-tooltip-time {
       margin-top: 8px;
@@ -1240,6 +1282,10 @@
           </div>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-bulk-actions">
+          <button class="btn" id="bring-back-all-btn" title="Bring back EVERY scheduled open item by 1 day (skips Fixed dates)">⏮ Bring Back All</button>
+          <button class="btn" id="postpone-all-btn" title="Postpone EVERY scheduled open item by 1 day (skips Fixed dates)">⏭ Postpone All</button>
+        </div>
       </section>
     </div>
     <div id="cal-tooltip" class="cal-tooltip" style="display:none"></div>
@@ -1347,6 +1393,10 @@
             <input id="form-target-date-picker" type="date" class="date-picker-hidden" tabindex="-1" aria-hidden="true" />
             <button type="button" id="form-date-picker-btn" class="date-cal-btn" title="Open calendar">📅</button>
           </div>
+          <label class="fixed-date-check">
+            <input id="form-date-fixed" type="checkbox" />
+            🔒 Fixed (date) — won't move with "postpone 1 day"
+          </label>
         </div>
         <div class="form-field">
           <label>Time estimate (hours)</label>
@@ -1413,7 +1463,7 @@
 
     const emptyData = {
       version: 1,
-      settings: { images_dir: 'images/', root_ids: [] },
+      settings: { images_dir: 'images/', root_ids: [], reserved_dates: [] },
       nodes: {}
     };
 
@@ -1520,6 +1570,7 @@
     let currentUser = '';
     let openMenuId = null;
     let hoveredNodeId = null;
+    let calTooltipPinned = false;
     let weatherByDate = {};   // iso → { emoji, label, temp_max, temp_min, precip, isHistory }
     let _previewObjectUrl = null; // tracks current image-preview blob URL so it can be revoked
     const calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
@@ -1654,6 +1705,7 @@
     const legacyPriorityMap = { very_high: 10, high: 7, medium: 4, low: 1 };
 
     function migrateData() {
+      if (!Array.isArray(data.settings.reserved_dates)) data.settings.reserved_dates = [];
       Object.values(data.nodes || {}).forEach(node => {
         if (Array.isArray(node.depends_on) && !Array.isArray(node.relates_to)) {
           node.relates_to = [...node.depends_on];
@@ -1662,6 +1714,7 @@
         if (!Array.isArray(node.relates_to)) node.relates_to = [];
         if (node.time_estimate === undefined) node.time_estimate = null;
         if (node.completed_date === undefined) node.completed_date = null;
+        if (node.date_fixed === undefined) node.date_fixed = false;
         if (typeof node.priority === 'string' && legacyPriorityMap[node.priority] != null) {
           node.priority = legacyPriorityMap[node.priority];
         }
@@ -1704,6 +1757,43 @@
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
+    }
+
+    function addDaysToIso(iso, days) {
+      const d = new Date(iso + 'T12:00:00');
+      d.setDate(d.getDate() + days);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // "Reserved" days (e.g. work days) are white spots with no personal time — postpone/
+    // bring-back should skip over them rather than land a task there. Marking a day
+    // reserved doesn't touch tasks already scheduled on it, only future shifts.
+    function isReservedDate(iso) {
+      return (data.settings.reserved_dates || []).includes(iso);
+    }
+
+    function toggleReservedDate(iso) {
+      if (!data.settings.reserved_dates) data.settings.reserved_dates = [];
+      const idx = data.settings.reserved_dates.indexOf(iso);
+      if (idx === -1) data.settings.reserved_dates.push(iso);
+      else data.settings.reserved_dates.splice(idx, 1);
+      saveState();
+      render();
+    }
+
+    // direction is +1 (postpone) or -1 (bring back). Steps past reserved days; guarded
+    // against pathological all-reserved stretches.
+    function skipReservedDates(iso, direction) {
+      let d = addDaysToIso(iso, direction);
+      let guard = 0;
+      while (isReservedDate(d) && guard < 366) {
+        d = addDaysToIso(d, direction);
+        guard++;
+      }
+      return d;
     }
 
     // Encode each path segment so spaces and special chars work in src=
@@ -1821,7 +1911,9 @@
       const isOverdue = node.target_date < today;
       const isToday   = node.target_date === today;
       const cls = isOverdue ? 'pill pill-date-overdue' : isToday ? 'pill pill-date-today' : 'pill pill-date';
-      return `<span class="${cls}" title="Target date">📅 ${day}. ${escapeHtml(mon)}</span>`;
+      const icon = node.date_fixed ? '🔒' : '📅';
+      const title = node.date_fixed ? 'Target date (fixed — won\'t move with "postpone 1 day")' : 'Target date';
+      return `<span class="${cls}" title="${title}">${icon} ${day}. ${escapeHtml(mon)}</span>`;
     }
 
     function renderNodeCardContent(node) {
@@ -2053,6 +2145,18 @@
           render();
         });
         menu.appendChild(wontDoBtn);
+
+        if (node.target_date) {
+          const postponeBtn = document.createElement('button');
+          postponeBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">📅</span>Postpone 1 day';
+          postponeBtn.addEventListener('click', () => postponeOneDay(node.id));
+          menu.appendChild(postponeBtn);
+
+          const bringBackBtn = document.createElement('button');
+          bringBackBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">↩️</span>Bring back 1 day';
+          bringBackBtn.addEventListener('click', () => bringBackOneDay(node.id));
+          menu.appendChild(bringBackBtn);
+        }
       }
 
       if (allowEdit) {
@@ -2338,6 +2442,11 @@
       return '#14532d';                         // 12+h  — very dark green
     }
 
+    function hideCalTooltip() {
+      calTooltipPinned = false;
+      document.getElementById('cal-tooltip').style.display = 'none';
+    }
+
     function renderCalendar() {
       const { year, month } = calState;
       const grid = document.getElementById('cal-grid');
@@ -2428,12 +2537,13 @@
 
         // Past days: colour by completed work (green). Future/today: colour by scheduled load (orange/red)
         const isPast = iso < todayKey;
+        const reserved = isReservedDate(iso);
         const bgColor = isPast ? doneColor(doneHours) : dayColor(nodes.length ? totalHours : 0);
-        const textDark = (isPast ? doneHours : totalHours) >= 6;
+        const textDark = !reserved && (isPast ? doneHours : totalHours) >= 6;
 
         const el = document.createElement('div');
-        el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather');
-        el.style.background = bgColor;
+        el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
+        el.style.background = reserved ? '#cbd5e1' : bgColor;
         el.style.color = textDark ? 'white' : '#1e293b';
 
         // Day number — top-left corner when weather shown, centred otherwise
@@ -2472,16 +2582,18 @@
           el.appendChild(badge);
         }
 
-        // Tooltip on hover
-        el.addEventListener('mouseenter', (e) => {
-          const tip = document.getElementById('cal-tooltip');
-          const hasContent = nodes.length || doneNodes.length || wx;
-          if (!hasContent) { tip.style.display = 'none'; return; }
-
+        // Tooltip: hover shows a live preview; click pins it open so it stays put while
+        // you interact with it — click a task to open Edit, or postpone it a day.
+        function buildTooltipHtml() {
           const dateLabel = new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
           let html = `<div class="cal-tooltip-date">${dateLabel}`;
           if (wx) html += ` <span class="cal-weather-status">${wx.emoji} ${escapeHtml(wx.label)}</span>`;
           html += '</div>';
+
+          html += `<label class="cal-tooltip-reserved">
+            <input type="checkbox" data-reserved-toggle="${iso}" ${isReservedDate(iso) ? 'checked' : ''} />
+            Reserved (no personal time — postpone/bring back skip this day)
+          </label>`;
 
           if (wx && wx.temp_max !== null) {
             html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">`;
@@ -2500,7 +2612,7 @@
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
               const byStr = n.completed_by ? ` <span style="color:var(--muted);font-size:10px;">· ${escapeHtml(n.completed_by)}</span>` : '';
               const prefix = hasChildren ? '📁 ' : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</div>`;
+              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
             }).join('');
             if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
@@ -2510,16 +2622,26 @@
             html += nodes.map(n => {
               const t = n.time_estimate || calcTime(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
-              return `<div class="cal-tooltip-task"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span>${escapeHtml(n.name)}${tStr}</div>`;
+              const lockHtml = n.date_fixed
+                ? `<span class="cal-tooltip-locked" title="Fixed date — won't move">🔒</span>`
+                : '';
+              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${escapeHtml(n.name)}${tStr}</span>${lockHtml}</div>`;
             }).join('');
             if (!isPast && totalHours) html += `<div class="cal-tooltip-time">Total: ${formatTime(totalHours)}</div>`;
           }
+          return html;
+        }
 
-          tip.innerHTML = html;
+        function showTooltip(force) {
+          const tip = document.getElementById('cal-tooltip');
+          const hasContent = nodes.length || doneNodes.length || wx;
+          if (!hasContent && !force) { tip.style.display = 'none'; return; }
+
+          tip.innerHTML = buildTooltipHtml();
           tip.style.display = 'block';
 
           // Position clamped to viewport — works on both desktop and mobile
-          const r = e.target.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
           const tipW = Math.min(280, window.innerWidth - 16);
           const tipH = tip.offsetHeight || 120;
           const margin = 8;
@@ -2535,9 +2657,15 @@
           tip.style.left = left + 'px';
           tip.style.top = top + 'px';
           tip.style.maxWidth = tipW + 'px';
-        });
+        }
+
+        el.addEventListener('mouseenter', () => { if (!calTooltipPinned) showTooltip(false); });
         el.addEventListener('mouseleave', () => {
-          document.getElementById('cal-tooltip').style.display = 'none';
+          if (!calTooltipPinned) document.getElementById('cal-tooltip').style.display = 'none';
+        });
+        el.addEventListener('click', () => {
+          calTooltipPinned = true;
+          showTooltip(true);
         });
 
         grid.appendChild(el);
@@ -2771,6 +2899,7 @@
       document.getElementById('form-priority').value = '4';
       document.getElementById('form-status').value = 'open';
       document.getElementById('form-target-date').value = '';
+      document.getElementById('form-date-fixed').checked = false;
       document.getElementById('form-time').value = '';
       document.getElementById('form-image').value = '';
       document.getElementById('form-image-file').value = '';
@@ -2798,6 +2927,7 @@
       document.getElementById('form-priority').value = String(node.priority || 4);
       document.getElementById('form-status').value = node.status || 'open';
       document.getElementById('form-target-date').value = toDisplayDate(node.target_date);
+      document.getElementById('form-date-fixed').checked = !!node.date_fixed;
       document.getElementById('form-time').value = node.time_estimate != null ? node.time_estimate : '';
       document.getElementById('form-image').value = node.image || '';
       document.getElementById('form-image-file').value = '';
@@ -2876,6 +3006,69 @@
       updateOrderControls(node);
     }
 
+    function shiftTargetDate(nodeId, days) {
+      const node = data.nodes[nodeId];
+      if (!node || !node.target_date) return;
+      if (node.date_fixed) {
+        window.alert(`"${node.name}" has a fixed date — uncheck "Fixed (date)" in Edit to change it.`);
+        return;
+      }
+      node.target_date = skipReservedDates(node.target_date, days);
+      openMenuId = null;
+      saveState();
+      render();
+    }
+
+    function postponeOneDay(nodeId) { shiftTargetDate(nodeId, 1); }
+    function bringBackOneDay(nodeId) { shiftTargetDate(nodeId, -1); }
+
+    // Shifts every open, dated item by `days` (positive = postpone, negative = bring
+    // back) — the whole plan slips together, not just what's overdue/due today.
+    // Fixed-date items are always skipped, with a stats prompt before anything moves.
+    function shiftAllScheduled(days) {
+      const verb = days > 0 ? 'Postpone' : 'Bring back';
+      const verbPast = days > 0 ? 'Postponed' : 'Brought back';
+      const verbLower = verb.toLowerCase();
+      const candidates = Object.values(data.nodes).filter(n =>
+        !n.archived && !isResolved(n.status) && n.target_date
+      );
+      if (!candidates.length) {
+        window.alert('No scheduled items to ' + verbLower + '.');
+        return;
+      }
+
+      const eligible = candidates.filter(n => !n.date_fixed);
+      const skipped = candidates.filter(n => n.date_fixed);
+
+      if (!eligible.length) {
+        window.alert(`All ${skipped.length} scheduled item(s) have a fixed date — nothing to ${verbLower}.`);
+        return;
+      }
+
+      const countByType = {};
+      eligible.forEach(n => { countByType[n.type] = (countByType[n.type] || 0) + 1; });
+      const breakdown = Object.entries(countByType)
+        .map(([type, count]) => `${count} ${(typeLabels[type] || type).toLowerCase()}${count === 1 ? '' : 's'}`)
+        .join(', ');
+
+      const listLine = n => `• ${n.name} (${formatDate(n.target_date)})`;
+
+      let msg = `${verb} ALL ${eligible.length} scheduled item(s) by 1 day?\n${breakdown}\n\n`
+        + eligible.map(listLine).join('\n');
+      if (skipped.length) {
+        msg += `\n\nWon't move (fixed date):\n` + skipped.map(listLine).join('\n');
+      }
+      if (!window.confirm(msg)) return;
+
+      eligible.forEach(n => { n.target_date = skipReservedDates(n.target_date, days); });
+      saveState();
+      render();
+      showKbdHint(`${verbPast} ${eligible.length} item(s)`);
+    }
+
+    function postponeAllScheduled() { shiftAllScheduled(1); }
+    function bringBackAllScheduled() { shiftAllScheduled(-1); }
+
     function deleteNodeWithChildren(nodeId) {
       const node = data.nodes[nodeId];
       if (!node) return;
@@ -2921,6 +3114,7 @@
         node.image = document.getElementById('form-image').value.trim() || null;
         node.priority = Number(document.getElementById('form-priority').value);
         node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
+        node.date_fixed = document.getElementById('form-date-fixed').checked;
         node.status = newStatus;
         // Keep completed_date in sync with status
         if (isResolved(newStatus) && !isResolved(prevStatus)) {
@@ -2994,6 +3188,7 @@
         priority: Number(document.getElementById('form-priority').value),
         status: document.getElementById('form-status').value,
         target_date: toIsoDate(document.getElementById('form-target-date').value) || null,
+        date_fixed: document.getElementById('form-date-fixed').checked,
         time_estimate: parseFloat(document.getElementById('form-time').value) || null,
         relates_to: selectedRelates(),
         archived: false
@@ -3170,13 +3365,33 @@
       }
     });
 
+    // Calendar day tooltip: click a task to open its Edit dialog.
+    document.getElementById('cal-tooltip').addEventListener('click', (e) => {
+      const taskRow = e.target.closest('[data-node-id]');
+      if (taskRow) {
+        hideCalTooltip();
+        openEditDialog(taskRow.dataset.nodeId);
+      }
+    });
+    document.getElementById('cal-tooltip').addEventListener('change', (e) => {
+      const cb = e.target.closest('[data-reserved-toggle]');
+      if (cb) toggleReservedDate(cb.dataset.reservedToggle);
+    });
+
+    // Dismiss the pinned calendar tooltip on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#cal-tooltip') && !e.target.closest('.cal-day')) {
+        hideCalTooltip();
+      }
+    });
+
     // Dismiss peek 1s after mouse leaves the browser window
     document.addEventListener('mouseleave', () => schedulePeekDismiss(1000));
     document.addEventListener('mouseenter', () => clearTimeout(peekDismissTimer));
 
     // Escape key dismisses peek popup
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hidePeekPopup();
+      if (e.key === 'Escape') { hidePeekPopup(); hideCalTooltip(); }
       // Ignore when typing in an input/textarea or modal is open
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       if (document.getElementById('modal-backdrop').classList.contains('open')) return;
@@ -3294,6 +3509,9 @@
 
     document.getElementById('filter-status').addEventListener('change', renderFilter);
     document.getElementById('filter-priority').addEventListener('change', renderFilter);
+
+    document.getElementById('postpone-all-btn').addEventListener('click', postponeAllScheduled);
+    document.getElementById('bring-back-all-btn').addEventListener('click', bringBackAllScheduled);
 
     document.getElementById('cal-prev').addEventListener('click', () => {
       calState.month--;

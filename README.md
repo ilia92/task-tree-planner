@@ -17,6 +17,10 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 ### 📅 Schedule overview
 - **Overdue / Today / Tomorrow** lanes always visible
 - **Monthly calendar heatmap** — colour-coded by workload (light green → red)
+- Click a day to pin its popup open — click a task inside it to jump straight to Edit
+- **Postpone 1 day** / **Bring back 1 day** per task, or **Postpone All** / **Bring Back All** to shift every scheduled item at once (itemized confirm prompt, skips Fixed-date items)
+- **Fixed (date)** checkbox locks a task's date against those shifts — only a manual edit can move it
+- **Reserved days** — mark a day as unavailable (e.g. a work day); postpone/bring-back route around it automatically
 - Weather forecast overlay on calendar days (requires `server.py`)
 - Expandable calendar for a full-width view
 
@@ -239,7 +243,7 @@ sudo systemctl enable --now task-planner
 ```json
 {
   "version": 1,
-  "settings": { "root_ids": ["space_1"] },
+  "settings": { "root_ids": ["space_1"], "reserved_dates": [] },
   "nodes": {
     "space_1": {
       "id": "space_1",
@@ -248,6 +252,7 @@ sudo systemctl enable --now task-planner
       "status": "open",
       "priority": 7,
       "target_date": "2026-04-15",
+      "date_fixed": false,
       "time_estimate": null,
       "children": ["project_1"],
       "relates_to": [],
