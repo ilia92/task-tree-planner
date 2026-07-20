@@ -1286,6 +1286,7 @@
           <button class="btn" id="bring-back-all-btn" title="Bring back EVERY scheduled open item by 1 day (skips Fixed dates)">⏮ Bring Back All</button>
           <button class="btn" id="postpone-all-btn" title="Postpone EVERY scheduled open item by 1 day (skips Fixed dates)">⏭ Postpone All</button>
         </div>
+        <div class="legend" style="margin-top:6px;">🔒 Reserved = no personal time; postpone/bring back skip that day</div>
       </section>
     </div>
     <div id="cal-tooltip" class="cal-tooltip" style="display:none"></div>
@@ -2442,6 +2443,13 @@
       return '#14532d';                         // 12+h  — very dark green
     }
 
+    function mixHex(hex1, hex2, ratio) {
+      const a = hex1.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
+      const b = hex2.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
+      const mixed = a.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio)));
+      return '#' + mixed.map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+
     function hideCalTooltip() {
       calTooltipPinned = false;
       document.getElementById('cal-tooltip').style.display = 'none';
@@ -2539,11 +2547,16 @@
         const isPast = iso < todayKey;
         const reserved = isReservedDate(iso);
         const bgColor = isPast ? doneColor(doneHours) : dayColor(nodes.length ? totalHours : 0);
-        const textDark = !reserved && (isPast ? doneHours : totalHours) >= 6;
+        // Reserved days with completed work get a greyed-out green so finished tasks
+        // stay visible instead of being fully masked by the flat reserved grey.
+        const reservedWithCompletion = reserved && isPast && doneHours > 0;
+        const textDark = (!reserved || reservedWithCompletion) && (isPast ? doneHours : totalHours) >= 6;
 
         const el = document.createElement('div');
         el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
-        el.style.background = reserved ? '#cbd5e1' : bgColor;
+        el.style.background = reservedWithCompletion
+          ? mixHex(bgColor, '#cbd5e1', 0.35)
+          : (reserved ? '#cbd5e1' : bgColor);
         el.style.color = textDark ? 'white' : '#1e293b';
 
         // Day number — top-left corner when weather shown, centred otherwise
@@ -2590,9 +2603,9 @@
           if (wx) html += ` <span class="cal-weather-status">${wx.emoji} ${escapeHtml(wx.label)}</span>`;
           html += '</div>';
 
-          html += `<label class="cal-tooltip-reserved">
+          html += `<label class="cal-tooltip-reserved" title="No personal time — postpone/bring back skip this day">
             <input type="checkbox" data-reserved-toggle="${iso}" ${isReservedDate(iso) ? 'checked' : ''} />
-            Reserved (no personal time — postpone/bring back skip this day)
+            Reserved
           </label>`;
 
           if (wx && wx.temp_max !== null) {
