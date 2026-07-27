@@ -2547,14 +2547,15 @@
         const isPast = iso < todayKey;
         const reserved = isReservedDate(iso);
         const bgColor = isPast ? doneColor(doneHours) : dayColor(nodes.length ? totalHours : 0);
-        // Reserved days with completed work get a greyed-out green so finished tasks
-        // stay visible instead of being fully masked by the flat reserved grey.
-        const reservedWithCompletion = reserved && isPast && doneHours > 0;
-        const textDark = (!reserved || reservedWithCompletion) && (isPast ? doneHours : totalHours) >= 6;
+        // Reserved days with work on them get a greyed-out version of their normal colour
+        // (green for past completions, the blue→red load scale for future/today scheduling)
+        // so the load stays visible instead of being fully masked by the flat reserved grey.
+        const reservedWithLoad = reserved && (isPast ? doneHours > 0 : nodes.length > 0);
+        const textDark = (!reserved || reservedWithLoad) && (isPast ? doneHours : totalHours) >= 6;
 
         const el = document.createElement('div');
         el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
-        el.style.background = reservedWithCompletion
+        el.style.background = reservedWithLoad
           ? mixHex(bgColor, '#cbd5e1', 0.35)
           : (reserved ? '#cbd5e1' : bgColor);
         el.style.color = textDark ? 'white' : '#1e293b';
