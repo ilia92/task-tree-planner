@@ -1287,6 +1287,7 @@
           <button class="btn" id="postpone-all-btn" title="Postpone EVERY scheduled open item by 1 day (skips Fixed dates)">⏭ Postpone All</button>
         </div>
         <div class="legend" style="margin-top:6px;">🔒 Reserved = no personal time; postpone/bring back skip that day</div>
+        <div class="legend">◩ Today: top-left = to do, bottom-right = done</div>
       </section>
     </div>
     <div id="cal-tooltip" class="cal-tooltip" style="display:none"></div>
@@ -2551,13 +2552,24 @@
         // (green for past completions, the blue→red load scale for future/today scheduling)
         // so the load stays visible instead of being fully masked by the flat reserved grey.
         const reservedWithLoad = reserved && (isPast ? doneHours > 0 : nodes.length > 0);
-        const textDark = (!reserved || reservedWithLoad) && (isPast ? doneHours : totalHours) >= 6;
+        const isTodayCell = iso === todayKey;
+        // Today's number sits on the top-left (to-do) half, so its contrast follows scheduled hours
+        const textDark = isTodayCell
+          ? totalHours >= 6
+          : (!reserved || reservedWithLoad) && (isPast ? doneHours : totalHours) >= 6;
 
         const el = document.createElement('div');
-        el.className = 'cal-day' + (iso === todayKey ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
+        el.className = 'cal-day' + (isTodayCell ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
         el.style.background = reservedWithLoad
           ? mixHex(bgColor, '#cbd5e1', 0.35)
           : (reserved ? '#cbd5e1' : bgColor);
+        // Today: diagonal split — top-left = still to do, bottom-right = done so far
+        if (isTodayCell) {
+          let doneC = doneColor(doneHours);
+          let todoC = dayColor(nodes.length ? totalHours : 0);
+          if (reserved) { doneC = mixHex(doneC, '#cbd5e1', 0.35); todoC = mixHex(todoC, '#cbd5e1', 0.35); }
+          el.style.background = `linear-gradient(135deg, ${todoC} 50%, ${doneC} 50%)`;
+        }
         el.style.color = textDark ? 'white' : '#1e293b';
 
         // Day number — top-left corner when weather shown, centred otherwise
