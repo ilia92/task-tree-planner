@@ -2629,10 +2629,16 @@
             html += `</div>`;
           }
 
-          // Past: show completed tasks in green; future/today: show scheduled tasks
-          if (isPast && doneNodes.length) {
-            html += `<div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:4px;">✓ Completed</div>`;
-            html += doneNodes.map(n => {
+          // Past: completed first, then anything still open. Today: still open first,
+          // completed below. Future: scheduled tasks only.
+          const openFirst = isTodayCell;
+          const bothShown = (isPast || isTodayCell) && doneNodes.length && nodes.length;
+          let doneHtml = '', openHtml = '';
+
+          if ((isPast || isTodayCell) && doneNodes.length) {
+            const mt = openFirst && nodes.length ? 'margin:6px 0 4px' : 'margin-bottom:4px';
+            doneHtml += `<div style="font-size:11px;font-weight:700;color:#15803d;${mt};">✓ Completed</div>`;
+            doneHtml += doneNodes.map(n => {
               const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
               const t = doneNodeHours(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
@@ -2640,12 +2646,15 @@
               const prefix = hasChildren ? '📁 ' : '';
               return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
             }).join('');
-            if (doneHours) html += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
+            if (doneHours) doneHtml += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
 
           if (nodes.length) {
-            if (isPast) html += `<div style="font-size:11px;font-weight:700;color:var(--muted);margin:6px 0 4px;">📌 Still open</div>`;
-            html += nodes.map(n => {
+            if (isPast || bothShown) {
+              const mt = openFirst ? 'margin-bottom:4px' : 'margin:6px 0 4px';
+              openHtml += `<div style="font-size:11px;font-weight:700;color:var(--muted);${mt};">📌 Still open</div>`;
+            }
+            openHtml += nodes.map(n => {
               const t = n.time_estimate || calcTime(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
               const lockHtml = n.date_fixed
@@ -2653,8 +2662,10 @@
                 : '';
               return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${escapeHtml(n.name)}${tStr}</span>${lockHtml}</div>`;
             }).join('');
-            if (!isPast && totalHours) html += `<div class="cal-tooltip-time">Total: ${formatTime(totalHours)}</div>`;
+            if (!isPast && totalHours) openHtml += `<div class="cal-tooltip-time">Total: ${formatTime(totalHours)}</div>`;
           }
+
+          html += openFirst ? openHtml + doneHtml : doneHtml + openHtml;
           return html;
         }
 
