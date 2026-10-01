@@ -776,6 +776,21 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* Leaf-task count pills (Spaces) */
+    .pill-count-done {
+      background: #dcfce7;
+      border-color: #4ade80;
+      color: #15803d;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pill-count-todo {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+    }
+
     .pill-time-scheduled {
       background: #f0fdf4;
       border-color: #86efac;
@@ -1313,7 +1328,10 @@
 
     <section class="panel tree-wrap">
       <div class="panel-header">
-        <h2>Main Tree</h2>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h2>Main Tree</h2>
+          <div class="node-pills-row" id="tree-count"></div>
+        </div>
         <div class="legend">Priority 1 (Low) → 10 (Very High): color shifts gray → green → orange → red</div>
       </div>
       <div class="roots" id="roots"></div>
@@ -1866,6 +1884,63 @@
       return { todo: t, done: 0 };
     }
 
+    // Only Tasks and Subtasks are work items; Spaces and Projects are containers
+    // and never counted. Every Task/Subtask in the subtree counts, including one
+    // that holds Subtasks of its own.
+    const COUNTABLE_TYPES = new Set(['task', 'subtask']);
+
+    // Cleared at the top of every render() — see the memo in calcTaskCounts
+    const taskCountCache = new Map();
+
+    // done/pending Task+Subtask counts for a subtree. wont_do counts as neither.
+    //
+    // `underResolved` tracks whether some ancestor is done/wont_do. Pending items
+    // below such an ancestor are skipped, because renderNode stops at resolved nodes
+    // and never draws them — counting them is what made the pills disagree with the
+    // tree. Done items still count from anywhere: completed Tasks legitimately live
+    // inside a completed Project, and that's the work the ✓ pill is reporting.
+    function calcTaskCounts(node, underResolved = false) {
+      // One walk per Space feeds several render paths, so memoise the top-level call
+      if (!underResolved) {
+        const hit = taskCountCache.get(node.id);
+        if (hit) return hit;
+      }
+
+      let done = 0, pending = 0;
+      if (COUNTABLE_TYPES.has(node.type)) {
+        if (node.status === 'done') done = 1;
+        else if (node.status !== 'wont_do' && !underResolved) pending = 1;
+      }
+
+      const childUnderResolved = underResolved || isResolved(node.status);
+      (node.children || []).forEach(id => {
+        const child = data.nodes[id];
+        if (!child || child.archived) return;
+        const s = calcTaskCounts(child, childUnderResolved);
+        done    += s.done;
+        pending += s.pending;
+      });
+
+      const result = { done, pending };
+      if (!underResolved) taskCountCache.set(node.id, result);
+      return result;
+    }
+
+    // ✓ done / ◻ pending pill pair — shared by Space cards and the Main Tree header
+    function countPillsMarkup(done, pending) {
+      const total = done + pending;
+      if (!total) return '';
+      return `<span class="pill pill-count-done" title="${done} of ${total} tasks completed">✓ ${done}</span>`
+           + `<span class="pill pill-count-todo" title="${pending} of ${total} tasks pending">◻ ${pending}</span>`;
+    }
+
+    // Spaces only, and only once they hold something
+    function countPillsHtml(node) {
+      if (node.type !== 'space') return '';
+      const { done, pending } = calcTaskCounts(node);
+      return countPillsMarkup(done, pending);
+    }
+
     function formatTime(hours) {
       if (!hours) return null;
       if (hours < 1) return `${Math.round(hours * 60)}m`;
@@ -1932,6 +2007,7 @@
                 <div class="node-pills-row">
                   <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
                   <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+                  ${countPillsHtml(node)}
                   ${timePillHtml(node)}
                   ${datePillHtml(node)}
                 </div>
@@ -2238,7 +2314,7 @@
           const pills = document.createElement('div');
           pills.className = 'compact-child-pills';
           const datePill = datePillHtml(child);
-          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${timePillHtml(child)}${datePill}`;
+          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${countPillsHtml(child)}${timePillHtml(child)}${datePill}`;
           card.appendChild(pills);
         } else {
           // grandchild: show time + date inline if available
@@ -2343,6 +2419,7 @@
         pillsRow.innerHTML = `
           <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
           <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+          ${countPillsHtml(node)}
           ${timePillHtml(node)}
           ${datePillHtml(node)}
         `;
@@ -2416,11 +2493,18 @@
 
     function renderRoots() {
       rootsEl.innerHTML = '';
+      let treeDone = 0, treePending = 0;
       (data.settings.root_ids || []).forEach(id => {
         const node = data.nodes[id];
         if (!node || node.archived || isResolved(node.status)) return;
         rootsEl.appendChild(renderNode(node));
+        const c = calcTaskCounts(node);
+        treeDone    += c.done;
+        treePending += c.pending;
       });
+
+      const treeCountEl = document.getElementById('tree-count');
+      if (treeCountEl) treeCountEl.innerHTML = countPillsMarkup(treeDone, treePending);
     }
 
     // ── Calendar heatmap ────────────────────────────────────────────────────
@@ -2591,6 +2675,8 @@
             const tempEl = document.createElement('div');
             tempEl.className = 'cal-weather-temp';
             tempEl.textContent = `${Math.round(wx.temp_max)}/${Math.round(wx.temp_min)}°`;
+            // Today: the temp sits on the bottom-right (done) half, so its contrast follows done hours
+            if (isTodayCell) tempEl.style.color = doneHours >= 6 ? 'white' : '#1e293b';
             el.appendChild(tempEl);
           }
           if (wx.isHistory) el.style.opacity = '0.75';
@@ -2643,8 +2729,9 @@
               const t = doneNodeHours(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
               const byStr = n.completed_by ? ` <span style="color:var(--muted);font-size:10px;">· ${escapeHtml(n.completed_by)}</span>` : '';
-              const prefix = hasChildren ? '📁 ' : '';
-              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
+              const prefix = (n.status === 'wont_do' ? '⛔ ' : '') + (hasChildren ? '📁 ' : '');
+              const wontStyle = n.status === 'wont_do' ? ' style="color:var(--muted)" title="Won\'t do"' : '';
+              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name"${wontStyle}>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
             }).join('');
             if (doneHours) doneHtml += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
@@ -2744,6 +2831,7 @@
 
     function render() {
       openMenuId = null;
+      taskCountCache.clear();
       hidePeekPopup();
       renderLanes();
       renderRoots();
