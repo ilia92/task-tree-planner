@@ -2675,6 +2675,8 @@
             const tempEl = document.createElement('div');
             tempEl.className = 'cal-weather-temp';
             tempEl.textContent = `${Math.round(wx.temp_max)}/${Math.round(wx.temp_min)}°`;
+            // Today: the temp sits on the bottom-right (done) half, so its contrast follows done hours
+            if (isTodayCell) tempEl.style.color = doneHours >= 6 ? 'white' : '#1e293b';
             el.appendChild(tempEl);
           }
           if (wx.isHistory) el.style.opacity = '0.75';
@@ -2727,8 +2729,9 @@
               const t = doneNodeHours(n);
               const tStr = t ? ` <span style="color:var(--muted)">⏱${formatTime(t)}</span>` : '';
               const byStr = n.completed_by ? ` <span style="color:var(--muted);font-size:10px;">· ${escapeHtml(n.completed_by)}</span>` : '';
-              const prefix = hasChildren ? '📁 ' : '';
-              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name">${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
+              const prefix = (n.status === 'wont_do' ? '⛔ ' : '') + (hasChildren ? '📁 ' : '');
+              const wontStyle = n.status === 'wont_do' ? ' style="color:var(--muted)" title="Won\'t do"' : '';
+              return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name"${wontStyle}>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
             }).join('');
             if (doneHours) doneHtml += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
           }
