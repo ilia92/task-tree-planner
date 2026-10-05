@@ -474,6 +474,17 @@
 
     .form-field.full { grid-column: 1 / -1; }
 
+    .ancestor-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+    .ancestor-item {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      padding: 3px 10px;
+      border: 1px solid var(--line); border-radius: 999px;
+      background: var(--bg);
+      font-size: 13px;
+    }
+    .ancestor-type { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .ancestor-sep { color: var(--muted); }
+
     .move-type-row { flex-direction: row; gap: 14px; }
     .move-type-row #form-parent-field { flex: 3 1 0%; min-width: 0; }
     .move-type-row #form-type-field { flex: 1 1 0%; min-width: 120px; }
@@ -1352,6 +1363,10 @@
     <div class="modal">
       <h2 id="modal-title">Add Item</h2>
       <div class="form-grid">
+        <div class="form-field full" id="form-ancestor-field" style="display:none;">
+          <label>Location</label>
+          <div class="ancestor-path" id="form-ancestor-path"></div>
+        </div>
         <div class="form-field full">
           <label>Name</label>
           <input id="form-name" type="text" placeholder="Item name" />
@@ -3019,6 +3034,7 @@
       document.getElementById('form-parent-trigger-label').textContent = '';
       closeParentCombo();
       document.getElementById('form-parent-field').style.display = 'none';
+      document.getElementById('form-ancestor-field').style.display = 'none';
       document.getElementById('form-type-field').style.display = 'none';
       document.getElementById('form-order-field').style.display = 'none';
       document.getElementById('form-priority').value = '4';
@@ -3034,11 +3050,40 @@
       openMenuId = null;
     }
 
+    // Chain of higher resources for a node, root first: [space, project, task, …].
+    // Walks parent_id links up from `parentId` (null = top level). A `seen` guard
+    // stops any accidental parent_id cycle.
+    function getAncestorChain(nodeId, parentId) {
+      const chain = [];
+      const seen = new Set([nodeId]);
+      let id = parentId;
+      while (id && id !== ROOT_SENTINEL && data.nodes[id] && !seen.has(id)) {
+        chain.unshift(data.nodes[id]);
+        seen.add(id);
+        id = data.nodes[id].parent_id;
+      }
+      return chain;
+    }
+
+    // Renders the "Location" breadcrumb in the Edit dialog: the path from the root
+    // resource down to the item's parent (its current one, or the one chosen in
+    // "Move to").
+    function renderAncestorPath(nodeId, parentId) {
+      const chain = getAncestorChain(nodeId, parentId);
+      document.getElementById('form-ancestor-path').innerHTML = chain.length
+        ? chain.map(a =>
+            `<span class="ancestor-item"><span class="ancestor-type">${typeLabels[a.type] || a.type}</span>${escapeHtml(a.name || a.id)}</span>`
+          ).join('<span class="ancestor-sep">→</span>')
+        : '<span class="ancestor-item"><span class="ancestor-type">Top level</span></span>';
+      document.getElementById('form-ancestor-field').style.display = '';
+    }
+
     function openEditDialog(nodeId) {
       hidePeekPopup();
       const node = data.nodes[nodeId];
       if (!node) return;
       addState = { open: true, anchorId: node.parent_id, mode: 'edit', editId: nodeId };
+      renderAncestorPath(nodeId, node.parent_id);
       document.getElementById('modal-title').textContent = 'Edit item';
       document.getElementById('form-name').value = node.name || '';
       document.getElementById('form-description').value = node.description || '';
@@ -3371,6 +3416,7 @@
       const val = e.target.value;
       const suggested = val === ROOT_SENTINEL ? 'space' : (typeChildren[data.nodes[val]?.type] || null);
       if (suggested) document.getElementById('form-type').value = suggested;
+      if (addState.editId) renderAncestorPath(addState.editId, val === ROOT_SENTINEL ? null : val);
     });
 
     // ── Custom Date Picker (Monday-first) ────────────────────────────────────
