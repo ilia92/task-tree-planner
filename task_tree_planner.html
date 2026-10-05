@@ -3072,9 +3072,9 @@
       const chain = getAncestorChain(nodeId, parentId);
       document.getElementById('form-ancestor-path').innerHTML = chain.length
         ? chain.map(a =>
-            `<span class="ancestor-item"><span class="ancestor-type">${typeLabels[a.type] || a.type}</span>${escapeHtml(a.name || a.id)}</span>`
+            `<span class="ancestor-item"><span class="ancestor-type">${escapeHtml(typeLabels[a.type] || a.type)}</span>${escapeHtml(a.name || a.id)}</span>`
           ).join('<span class="ancestor-sep">→</span>')
-        : '<span class="ancestor-item"><span class="ancestor-type">Top level</span></span>';
+        : '<span class="ancestor-item">Top level</span>';
       document.getElementById('form-ancestor-field').style.display = '';
     }
 
