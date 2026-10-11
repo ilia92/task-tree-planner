@@ -3,3 +3,6 @@ data.json
 weather_history.json
 backup_tasks.log
 config.json
+
+*.tmp
+__pycache__/

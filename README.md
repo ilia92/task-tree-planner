@@ -193,14 +193,93 @@ The server uses a **session cookie** authentication system with multi-user suppo
 - Users are stored in `config.json` as `{ "users": { "alice": "<sha256>", "bob": "<sha256>" } }`
 - On successful login a random 64-character session token is set as an `HttpOnly` cookie
 - Sessions expire after **7 days**
-- All routes except `/login` require a valid session — unauthenticated requests redirect to the login page
+- All routes except `/login` require a valid session (or an [API token](#write-api)). Unauthenticated page requests redirect to the login page, and `/api/*` requests get a `401`
 - Passwords are validated with `secrets.compare_digest` (constant-time, safe against timing attacks)
 - Failed login attempts are logged with the IP address but never the attempted password
 - **Add `config.json` to `.gitignore`** if you push to a public repo
 
 ```
-config.json  ← contains usernames + password hashes, never commit this
+config.json  ← contains usernames + password/token hashes, never commit this
 ```
+
+Only `task_tree_planner.html`, `data.json` and files under `images/` are served as static files. `config.json`, the server source, logs and the allowlist are never served.
+
+---
+
+## Write API
+
+A JSON API under `/api/nodes` lets scripts and integrations read and change the tree, including creating whole nested subtrees in one call.
+
+### Auth
+
+API clients use bearer tokens. Browser sessions also work.
+
+```bash
+python server.py --add-token my-script     # prints the token once
+python server.py --list-tokens
+python server.py --remove-token my-script
+```
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/nodes
+```
+
+Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP allowlist still applies. When a token resolves a task, its name is recorded as `completed_by`.
+
+### Endpoints
+
+| Method | Path | Body | Effect |
+|---|---|---|---|
+| GET | `/api/nodes` | — | `{revision, root_ids, nodes}` |
+| GET | `/api/nodes/{id}?depth=N` | — | The node with `children` expanded into nested objects. Depth defaults to unlimited. At the depth limit, `children` stays a list of ids and the node gets `children_truncated: true` |
+| POST | `/api/nodes` | `{parent_id, position?, node}` | Creates a node or a nested subtree. `parent_id: null` creates it at the top level |
+| PATCH | `/api/nodes/{id}` | fields, `type?`, `cascade?` | Partial update. Changing `type` also shifts descendants unless `cascade: false` |
+| POST | `/api/nodes/{id}/move` | `{parent_id, position?}` | Reparents or reorders. Moving a node under itself or one of its descendants is rejected |
+| DELETE | `/api/nodes/{id}` | — | Deletes the node and all descendants, and removes them from every `relates_to` |
+
+Editable fields:
+- `name`, `description`, `image`
+- `priority` (1–10)
+- `status` (`open`, `in_progress`, `blocked`, `done`, `wont_do`)
+- `target_date` (`YYYY-MM-DD` or null), `date_fixed`
+- `time_estimate` (hours)
+- `relates_to` (list of ids)
+- `collapsed`, `archived`
+
+Setting a resolved status fills `completed_date` and `completed_by`, exactly as the UI does. `id`, `parent_id` and `children` are managed by the server.
+
+`position` is optional on create and move. It is a 0-based index among the new siblings, and leaving it out appends.
+
+### Creating nested tasks
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  http://localhost:8000/api/nodes -d '{
+  "parent_id": "project_1",
+  "position": 0,
+  "node": {
+    "name": "Launch", "priority": 7, "ref": "launch",
+    "children": [
+      {"name": "Write copy", "children": [{"name": "Draft", "relates_to": ["launch"]}]},
+      {"name": "Review", "target_date": "2026-11-01"}
+    ]
+  }
+}'
+# → {"ok": true, "revision": 12, "id": "task_7",
+#    "ids": {"0": "task_7", "0.0": "subtask_4", "0.0.0": "subtask_5", "0.1": "subtask_6"},
+#    "refs": {"launch": "task_7"}}
+```
+
+- **Types follow the hierarchy.** A child of a project becomes a task, a child of a task becomes a subtask, and subtasks nest indefinitely. You can pass an explicit `type` only at the default level or deeper.
+- **The whole subtree is created atomically.** If any node is invalid, nothing is written and the error names its path, such as `0.1`.
+- **New IDs come back in the response.** `ids` maps payload paths to new IDs. Any node can carry a `ref` label, which other nodes in the same payload can use in `relates_to`. The `refs` map in the response translates labels to IDs.
+- **Limits:** 1000 nodes and 32 levels per request.
+
+### Concurrency
+
+Every write bumps a `revision` counter stored in `data.json`. All writes are serialized and written atomically, through a temp file and a rename.
+- **API writes:** add `"if_revision": N` to the body, or `?if_revision=N` on DELETE. The server answers `409 {"error":"conflict","revision":current}` if the data changed since you read it.
+- **The UI:** it sends its revision on every save. If the API or another tab changed the data in the meantime, the UI reloads and asks you to redo your last edit instead of silently overwriting. It also picks up API changes when the tab regains focus.
 
 ## Running as a systemd service
 
@@ -243,6 +322,7 @@ sudo systemctl enable --now task-planner
 ```json
 {
   "version": 1,
+  "revision": 42,
   "settings": { "root_ids": ["space_1"], "reserved_dates": [] },
   "nodes": {
     "space_1": {
