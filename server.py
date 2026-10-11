@@ -18,6 +18,7 @@ Run:
     python server.py [port]           # default port: 8000
 """
 
+import collections
 import datetime
 import hashlib
 import http.cookies
@@ -291,13 +292,20 @@ def check_bearer(headers):
 
 
 # ── Data store ────────────────────────────────────────────────────────────────
-# All writes to data.json go through DATA_LOCK and an atomic replace. Every write
-# bumps data["revision"]; writers that send a stale revision get a 409.
+# The server is the single source of truth. data.json is kept in memory (reloaded
+# if the file changes on disk, e.g. a restored backup) and every write goes through
+# DATA_LOCK and an atomic replace. Each write bumps data["revision"] and records
+# which nodes it touched in a change log, so clients can sync incrementally
+# (GET /api/changes) and long-poll for live updates.
 
 DATA_LOCK        = threading.Lock()
+DATA_CHANGED     = threading.Condition(DATA_LOCK)
 MAX_BODY         = 20 * 1024 * 1024
 MAX_CREATE_NODES = 1000
 MAX_CREATE_DEPTH = 32
+MAX_BATCH_OPS    = 1000
+MAX_POLL_WAIT    = 30
+CHANGE_LOG_SIZE  = 1000
 
 TYPE_CHILDREN = {"space": "project", "project": "task", "task": "subtask", "subtask": "subtask"}
 TYPE_ORDER    = ["space", "project", "task", "subtask"]
@@ -305,6 +313,11 @@ STATUSES      = {"open", "in_progress", "blocked", "done", "wont_do"}
 RESOLVED      = {"done", "wont_do"}
 EDITABLE      = {"name", "description", "image", "priority", "status", "target_date",
                  "date_fixed", "time_estimate", "relates_to", "collapsed", "archived"}
+LEGACY_PRIORITY = {"very_high": 10, "high": 7, "medium": 4, "low": 1}
+
+_cache: dict = {"data": None, "stamp": None}
+# (revision, touched node ids, settings changed, reset) — reset means "resync everything"
+_change_log: collections.deque = collections.deque(maxlen=CHANGE_LOG_SIZE)
 
 
 class ApiError(Exception):
@@ -313,10 +326,42 @@ class ApiError(Exception):
         self.status, self.error, self.extra = status, error, extra
 
 
+class RawJson:
+    """Pre-serialized JSON body (serialized under DATA_LOCK so it can't change mid-send)."""
+    def __init__(self, payload):
+        self.body = json.dumps(payload, ensure_ascii=False).encode()
+
+
 def empty_data() -> dict:
     return {"version": 1, "revision": 0,
             "settings": {"images_dir": "images/", "root_ids": [], "reserved_dates": []},
             "nodes": {}}
+
+
+def migrate_data(d: dict):
+    """Normalise legacy/missing fields in place (server-side port of the UI's migrateData)."""
+    settings = d.setdefault("settings", {})
+    if not isinstance(settings.get("root_ids"), list):
+        settings["root_ids"] = []
+    if not isinstance(settings.get("reserved_dates"), list):
+        settings["reserved_dates"] = []
+    d.setdefault("nodes", {})
+    if not isinstance(d.get("revision"), int) or isinstance(d.get("revision"), bool):
+        d["revision"] = 0
+    for nid, node in d["nodes"].items():
+        node["id"] = nid
+        if isinstance(node.get("depends_on"), list) and not isinstance(node.get("relates_to"), list):
+            node["relates_to"] = list(node["depends_on"])
+        node.pop("depends_on", None)
+        if not isinstance(node.get("relates_to"), list):
+            node["relates_to"] = []
+        node.setdefault("time_estimate", None)
+        node.setdefault("completed_date", None)
+        node.setdefault("date_fixed", False)
+        p = node.get("priority")
+        if isinstance(p, str) and p in LEGACY_PRIORITY:
+            p = LEGACY_PRIORITY[p]
+        node["priority"] = p if isinstance(p, int) and not isinstance(p, bool) and 1 <= p <= 10 else 4
 
 
 def read_data() -> dict:
@@ -327,10 +372,9 @@ def read_data() -> dict:
         return empty_data()
     except ValueError as e:
         raise ApiError(500, f"data.json is not valid JSON: {e}")
-    d.setdefault("settings", {}).setdefault("root_ids", [])
-    d.setdefault("nodes", {})
-    if not isinstance(d.get("revision"), int):
-        d["revision"] = 0
+    if not isinstance(d, dict):
+        raise ApiError(500, "data.json must contain a JSON object")
+    migrate_data(d)
     return d
 
 
@@ -343,16 +387,113 @@ def write_data(d: dict):
     os.replace(tmp, DATA_FILE)
 
 
-def mutate(fn, if_revision=None) -> dict:
-    """Run fn(data) under the lock and persist the result. If fn raises, nothing is written."""
+def _file_stamp():
+    try:
+        st = os.stat(DATA_FILE)
+        return (st.st_mtime_ns, st.st_size)
+    except FileNotFoundError:
+        return None
+
+
+def current_data() -> dict:
+    """The in-memory data, reloaded if data.json changed on disk. Caller holds DATA_LOCK."""
+    stamp = _file_stamp()
+    if _cache["data"] is not None and stamp == _cache["stamp"]:
+        return _cache["data"]
+    d = read_data()
+    prev = _cache["data"]
+    if prev is not None:
+        # Changed outside the server (hand edit, restored backup): make sure clients
+        # see a newer revision and resync from scratch.
+        if d["revision"] <= prev["revision"]:
+            d["revision"] = prev["revision"] + 1
+        _change_log.append((d["revision"], frozenset(), False, True))
+        DATA_CHANGED.notify_all()
+    _cache.update(data=d, stamp=stamp)
+    return d
+
+
+def _snapshot(d):
+    return ({k: json.dumps(v, sort_keys=True) for k, v in d["nodes"].items()},
+            json.dumps(d["settings"], sort_keys=True))
+
+
+def mutate(fn, if_revision=None, reset=False) -> dict:
+    """Run fn(data) under the lock, persist, and log what changed.
+
+    If fn raises, nothing is written (and the possibly half-modified in-memory copy is
+    dropped). Returns {ok, since, revision, changes: {nodes, deleted, settings?}, ...fn result}.
+    reset=True marks a whole-document replace: clients resync instead of patching.
+    """
     with DATA_LOCK:
-        d = read_data()
-        if if_revision is not None and if_revision != d["revision"]:
-            raise ApiError(409, "conflict", revision=d["revision"])
-        result = fn(d) or {}
-        d["revision"] += 1
-        write_data(d)
-        return {"ok": True, "revision": d["revision"], **result}
+        d = current_data()
+        since = d["revision"]
+        if if_revision is not None and if_revision != since:
+            raise ApiError(409, "conflict", revision=since)
+        before_nodes, before_settings = _snapshot(d)
+        try:
+            result = fn(d) or {}
+            d["revision"] = since + 1
+            write_data(d)
+        except BaseException:
+            _cache.update(data=None, stamp=None)
+            raise
+        _cache["stamp"] = _file_stamp()
+
+        after_nodes, after_settings = _snapshot(d)
+        changed = [k for k, v in after_nodes.items() if before_nodes.get(k) != v]
+        deleted = [k for k in before_nodes if k not in after_nodes]
+        settings_changed = after_settings != before_settings
+        _change_log.append((d["revision"], frozenset(changed) | frozenset(deleted), settings_changed, reset))
+        DATA_CHANGED.notify_all()
+
+        out = {"ok": True, "since": since, "revision": d["revision"], **result}
+        if reset:
+            out["reset"] = True
+        else:
+            changes = {"nodes": {k: d["nodes"][k] for k in changed}, "deleted": deleted}
+            if settings_changed:
+                changes["settings"] = d["settings"]
+            out["changes"] = changes
+        return RawJson(out)
+
+
+def changes_since(since: int) -> dict:
+    """Everything a client at revision `since` needs to catch up. Caller holds DATA_LOCK.
+
+    Returns the latest state of every node touched since then (so applying it is
+    idempotent), or {reset: true, data} when the log can't cover the gap.
+    """
+    d = current_data()
+    cur = d["revision"]
+    if since == cur:
+        return {"ok": True, "since": since, "revision": cur, "changes": {"nodes": {}, "deleted": []}}
+    entries = [e for e in _change_log if since < e[0] <= cur]
+    if since > cur or len(entries) != cur - since or any(e[3] for e in entries):
+        return {"ok": True, "reset": True, "revision": cur, "data": d}
+    ids = set().union(*(e[1] for e in entries))
+    changes = {"nodes": {i: d["nodes"][i] for i in ids if i in d["nodes"]},
+               "deleted": sorted(i for i in ids if i not in d["nodes"])}
+    if any(e[2] for e in entries):
+        changes["settings"] = d["settings"]
+    return {"ok": True, "since": since, "revision": cur, "changes": changes}
+
+
+def wait_for_changes(since: int, wait: float) -> RawJson:
+    """Long-poll: block up to `wait` seconds until the revision moves past `since`."""
+    deadline = time.monotonic() + wait
+    with DATA_LOCK:
+        while current_data()["revision"] == since:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            DATA_CHANGED.wait(min(remaining, 5))   # wake periodically to notice on-disk edits
+        return RawJson(changes_since(since))
+
+
+def full_data() -> RawJson:
+    with DATA_LOCK:
+        return RawJson({"ok": True, **current_data()})
 
 
 # ── Tree helpers (Python ports of the UI's logic) ─────────────────────────────
@@ -577,6 +718,169 @@ def subtree_view(d, node_id, depth):
     return node
 
 
+# ── Write operations ──────────────────────────────────────────────────────────
+# Each op validates its arguments, mutates d in place and returns extra result
+# fields. They run inside mutate(), so a failing op leaves data.json untouched.
+# The REST endpoints and POST /api/batch share them.
+
+def _check_keys(args, allowed):
+    unknown = set(args) - set(allowed) - {"op"}
+    if unknown:
+        raise ApiError(400, f"unknown argument(s): {', '.join(sorted(unknown))}")
+
+
+def _require_node(d, node_id):
+    if not isinstance(node_id, str) or node_id not in d["nodes"]:
+        raise ApiError(404, f"node '{node_id}' not found")
+    return d["nodes"][node_id]
+
+
+def _parent_arg(d, args):
+    if "parent_id" not in args:
+        raise ApiError(400, "parent_id is required (use null for top level)")
+    parent_id = args["parent_id"]
+    if parent_id is not None and (not isinstance(parent_id, str) or parent_id not in d["nodes"]):
+        raise ApiError(404, f"parent '{parent_id}' not found")
+    return parent_id
+
+
+def op_create(d, args, user):
+    """{parent_id, position?, node: {..., children: [...]}}"""
+    _check_keys(args, {"parent_id", "position", "node"})
+    parent_id = _parent_arg(d, args)
+    if not isinstance(args.get("node"), dict):
+        raise ApiError(400, "node must be an object")
+    return create_subtree(d, parent_id, _parse_position(args.get("position")), args["node"], user)
+
+
+def op_update(d, args, user):
+    """{id, set: {fields}, type?, cascade?}"""
+    _check_keys(args, {"id", "set", "type", "cascade"})
+    node = _require_node(d, args.get("id"))
+    fields = args.get("set", {})
+    if not isinstance(fields, dict):
+        raise ApiError(400, "set must be an object")
+    fields = clean_fields(fields)
+    new_type, cascade = args.get("type"), args.get("cascade", True)
+    if new_type is not None and new_type not in TYPE_ORDER:
+        raise ApiError(400, f"type must be one of {TYPE_ORDER}")
+    if not isinstance(cascade, bool):
+        raise ApiError(400, "cascade must be a boolean")
+    if not fields and new_type is None:
+        raise ApiError(400, "nothing to update")
+    status = fields.pop("status", None)
+    if "relates_to" in fields:
+        fields["relates_to"] = resolve_relates(d, node["id"], fields["relates_to"])
+    node.update(fields)
+    if status is not None and status != node.get("status"):
+        apply_status(node, status, user)
+    if new_type is not None and new_type != node.get("type"):
+        change_type(d, node, new_type, cascade)
+    return {"id": node["id"]}
+
+
+def op_move(d, args, user):
+    """{id, parent_id, position?} — reparent and/or reorder."""
+    _check_keys(args, {"id", "parent_id", "position"})
+    node = _require_node(d, args.get("id"))
+    parent_id = _parent_arg(d, args)
+    position = _parse_position(args.get("position"))
+    if parent_id is not None and parent_id in collect_descendants(d, node["id"]):
+        raise ApiError(400, "cannot move a node under itself or its descendants")
+    detach(d, node)
+    attach(d, node, parent_id, position)
+    return {"id": node["id"]}
+
+
+def op_delete(d, args, user):
+    """{id} — cascades to descendants and strips relates_to references."""
+    _check_keys(args, {"id"})
+    node = _require_node(d, args.get("id"))
+    doomed = collect_descendants(d, node["id"])
+    detach(d, node)
+    for nid in doomed:
+        del d["nodes"][nid]
+    gone = set(doomed)
+    for n in d["nodes"].values():
+        if any(x in gone for x in n.get("relates_to") or []):
+            n["relates_to"] = [x for x in n["relates_to"] if x not in gone]
+    return {"deleted": doomed}
+
+
+def op_reserve_date(d, args, user):
+    """{date, reserved} — mark/unmark a day as reserved (postpone skips it)."""
+    _check_keys(args, {"date", "reserved"})
+    date = args.get("date")
+    clean_fields({"target_date": date})           # same YYYY-MM-DD validation
+    if date is None:
+        raise ApiError(400, "date is required")
+    if not isinstance(args.get("reserved"), bool):
+        raise ApiError(400, "reserved must be a boolean")
+    dates = d["settings"].setdefault("reserved_dates", [])
+    if args["reserved"] and date not in dates:
+        dates.append(date)
+    elif not args["reserved"]:
+        dates[:] = [x for x in dates if x != date]
+    return {}
+
+
+OPS = {"create": op_create, "update": op_update, "move": op_move,
+       "delete": op_delete, "reserve_date": op_reserve_date}
+
+
+def op_batch(d, ops, user):
+    """Apply a list of ops atomically — all of them or none."""
+    if not isinstance(ops, list) or not ops:
+        raise ApiError(400, "ops must be a non-empty list")
+    if len(ops) > MAX_BATCH_OPS:
+        raise ApiError(400, f"more than {MAX_BATCH_OPS} ops in one batch")
+    results = []
+    for i, op in enumerate(ops):
+        if not isinstance(op, dict) or op.get("op") not in OPS:
+            raise ApiError(400, f"ops[{i}]: op must be one of {sorted(OPS)}")
+        try:
+            results.append(OPS[op["op"]](d, op, user))
+        except ApiError as e:
+            raise ApiError(e.status, f"ops[{i}] ({op['op']}): {e.error}", **e.extra)
+    return {"results": results}
+
+
+def prepare_import(doc) -> dict:
+    """Validate a whole document (Import JSON) and repair dangling references."""
+    if not isinstance(doc, dict) or not isinstance(doc.get("nodes"), dict) \
+            or not isinstance(doc.get("settings"), dict) \
+            or not isinstance(doc["settings"].get("root_ids"), list):
+        raise ApiError(400, "Invalid data format: expected {settings: {root_ids: []}, nodes: {}}")
+    if not all(isinstance(n, dict) for n in doc["nodes"].values()):
+        raise ApiError(400, "Invalid data format: every node must be an object")
+    doc = json.loads(json.dumps(doc))
+    doc.pop("ok", None)
+    migrate_data(doc)
+    nodes = doc["nodes"]
+    for n in nodes.values():
+        n["children"] = [c for c in n.get("children") or [] if c in nodes]
+        n["relates_to"] = [r for r in n["relates_to"] if r in nodes]
+        if n.get("parent_id") not in nodes:
+            n["parent_id"] = None
+        if n.get("type") not in TYPE_ORDER:
+            n["type"] = "subtask"
+    roots = []
+    for r in doc["settings"]["root_ids"]:
+        if r in nodes and r not in roots:
+            roots.append(r)
+    doc["settings"]["root_ids"] = roots
+    return doc
+
+
+def op_replace(d, doc, user):
+    """Replace the whole document (keeps the revision counter moving forward)."""
+    revision = d["revision"]
+    d.clear()
+    d.update(doc)
+    d["revision"] = revision
+    return {}
+
+
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -772,6 +1076,11 @@ def parse_multipart(data: bytes, boundary: bytes):
     return parts
 
 
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+MIME_TYPES = {".html": "text/html; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def handle(self):
         try:
@@ -781,6 +1090,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         print(f"  {self.address_string()} {fmt % args}")
+
+    def log_request(self, code="-", size="-"):
+        # Long-poll requests arrive every ~25 s per open tab — don't flood the log with them.
+        if self.path.startswith("/api/changes") and str(code) == "200":
+            return
+        super().log_request(code, size)
 
     def _ip_allowed(self) -> bool:
         return is_allowed(self.client_address[0])
@@ -805,123 +1120,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _serve_login(self):
-        body = LOGIN_HTML.encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self._send(200, LOGIN_HTML.encode(), "text/html; charset=utf-8")
+
+    def _send(self, status, body: bytes, content_type, extra_headers=()):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        for k, v in extra_headers:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self):
-        if not self._ip_allowed():
-            self.send_error(403, "Forbidden")
-            return
-
-        parsed = urlparse(self.path)
-        path   = parsed.path
-        qs     = parse_qs(parsed.query)
-
-        if path == "/login":
-            self._serve_login()
-            return
-
-        if not self._authed():
-            if path.startswith("/api/"):
-                self._json(401, {"ok": False, "error": "Unauthorized"})
-            else:
-                self._redirect_login()
-            return
-
-        if path == "/api/nodes" or path.startswith("/api/nodes/"):
-            self._handle_api("GET", path, qs, b"")
-            return
-
-        if path == "/api/instance":
-            self._json(200, {"instance_name": INSTANCE_NAME})
-            return
-
-        if path == "/api/me":
-            token    = get_session_token(self.headers)
-            username = get_session_username(token) if token else ""
-            self._json(200, {"username": username})
-            return
-
-        if path == "/geolocate":
-            geo = geolocate_by_ip()
-            if geo: self._json(200, {"ok": True, **geo})
-            else:   self._json(500, {"ok": False, "error": "Geolocation failed"})
-            return
-
-        if path == "/weather":
-            lat = qs.get("lat", [None])[0]
-            lon = qs.get("lon", [None])[0]
-            if not lat or not lon:
-                self._json(400, {"ok": False, "error": "lat/lon required"}); return
-            try: lat, lon = float(lat), float(lon)
-            except ValueError:
-                self._json(400, {"ok": False, "error": "Invalid lat/lon"}); return
-
-            global _weather_cache
-            now = time.time()
-            cache_hit = (
-                _weather_cache.get("fetched_at", 0) + CACHE_TTL > now
-                and abs(_weather_cache.get("lat", 0) - lat) < 0.1
-                and abs(_weather_cache.get("lon", 0) - lon) < 0.1
-            )
-            if not cache_hit:
-                try:
-                    forecast = fetch_weather(lat, lon)
-                    _weather_cache = {"fetched_at": now, "lat": lat, "lon": lon, "forecast": forecast}
-                    merge_forecast_into_history(forecast)
-                    print(f"  [weather] Fetched {len(forecast)} days for {lat:.2f},{lon:.2f}")
-                except Exception as e:
-                    print(f"  [weather] Fetch failed: {e}")
-                    if "forecast" not in _weather_cache:
-                        self._json(500, {"ok": False, "error": str(e)}); return
-            else:
-                print(f"  [weather] Cache hit (age {int(now-_weather_cache['fetched_at'])}s)")
-
-            history = load_weather_history()
-            self._json(200, {"ok": True, "forecast": _weather_cache["forecast"],
-                             "history": history, "cached": cache_hit})
-            return
-
-        if path == "/" or path == "/index.html":
-            path = "/task_tree_planner.html"
-
-        path = unquote(path)
-        # Only the app, its data and uploaded images are served — never config.json
-        # (password/token hashes), server source, logs or the allowlist.
-        if path == "/task_tree_planner.html":
-            filepath = os.path.join(BASE_DIR, "task_tree_planner.html")
-        elif path == "/data.json":
-            filepath = DATA_FILE
-        elif path.startswith("/images/"):
-            filepath = os.path.normpath(os.path.join(IMAGES_DIR, path[len("/images/"):]))
-            if not filepath.startswith(IMAGES_DIR + os.sep):
-                self.send_error(403); return
-        else:
-            self.send_error(404, f"Not found: {path}"); return
-        if not os.path.isfile(filepath):
-            self.send_error(404, f"Not found: {path}"); return
-
-        ext  = os.path.splitext(filepath)[1].lower()
-        mime = {".html":"text/html",".json":"application/json",".png":"image/png",
-                ".jpg":"image/jpeg",".jpeg":"image/jpeg",".gif":"image/gif",
-                ".webp":"image/webp",".svg":"image/svg+xml"}.get(ext,"application/octet-stream")
-
-        if filepath == DATA_FILE:
-            with DATA_LOCK:
-                with open(filepath, "rb") as f: body = f.read()
-        else:
-            with open(filepath, "rb") as f: body = f.read()
-        self.send_response(200)
-        self.send_header("Content-Type", mime)
-        self.send_header("Content-Length", str(len(body)))
-        if filepath == DATA_FILE:
-            self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+    def _json(self, status, payload):
+        body = payload.body if isinstance(payload, RawJson) else json.dumps(payload, ensure_ascii=False).encode()
+        self._send(status, body, "application/json; charset=utf-8", [("Cache-Control", "no-store")])
 
     def _read_body(self):
         """Read the request body, or reply 413/400 and return None."""
@@ -933,28 +1145,110 @@ class Handler(BaseHTTPRequestHandler):
             self._json(413, {"ok": False, "error": "Request body too large"}); return None
         return self.rfile.read(length) if length > 0 else b""
 
-    def _api_preamble(self):
-        """Shared IP + auth checks for PATCH/DELETE. Returns the body, or None if already answered."""
+    # ── Method entry points ──────────────────────────────────────────────────
+
+    def do_GET(self):
         if not self._ip_allowed():
-            self.send_error(403, "Forbidden"); return None
+            self.send_error(403, "Forbidden"); return
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+
+        if path == "/login":
+            self._serve_login(); return
+        if not self._authed():
+            if path.startswith("/api/"):
+                self._json(401, {"ok": False, "error": "Unauthorized"})
+            else:
+                self._redirect_login()
+            return
+        if path.startswith("/api/"):
+            self._handle_api("GET", path, parse_qs(parsed.query), b""); return
+        self._serve_static(path)
+
+    def do_POST(self):
+        if not self._ip_allowed():
+            self.send_error(403, "Forbidden"); return
         body = self._read_body()
         if body is None:
-            return None
+            return
+        parsed = urlparse(self.path)
+        if parsed.path == "/do-login":
+            self._login(body); return
         if not self._authed():
-            self._json(401, {"ok": False, "error": "Unauthorized"}); return None
-        return body
+            self._json(401, {"ok": False, "error": "Unauthorized"}); return
+        if parsed.path == "/save":
+            # The pre-API UI saved the whole document here. Tell stale tabs to reload.
+            self._json(410, {"ok": False, "error": "This page is out of date — reload it"}); return
+        if parsed.path.startswith("/api/"):
+            self._handle_api("POST", parsed.path, parse_qs(parsed.query), body); return
+        self.send_error(404)
 
-    def do_PATCH(self):
-        body = self._api_preamble()
-        if body is None: return
+    def _api_method(self, method):
+        if not self._ip_allowed():
+            self.send_error(403, "Forbidden"); return
+        body = self._read_body()
+        if body is None:
+            return
+        if not self._authed():
+            self._json(401, {"ok": False, "error": "Unauthorized"}); return
         parsed = urlparse(self.path)
-        self._handle_api("PATCH", parsed.path, parse_qs(parsed.query), body)
+        if not parsed.path.startswith("/api/"):
+            self.send_error(405); return
+        self._handle_api(method, parsed.path, parse_qs(parsed.query), body)
 
-    def do_DELETE(self):
-        body = self._api_preamble()
-        if body is None: return
-        parsed = urlparse(self.path)
-        self._handle_api("DELETE", parsed.path, parse_qs(parsed.query), body)
+    def do_PUT(self):    self._api_method("PUT")
+    def do_PATCH(self):  self._api_method("PATCH")
+    def do_DELETE(self): self._api_method("DELETE")
+
+    # ── Static files ─────────────────────────────────────────────────────────
+
+    def _serve_static(self, path):
+        # Only the app and uploaded images are served — never data.json (use the API),
+        # config.json (password/token hashes), server source, logs or the allowlist.
+        if path in ("/", "/index.html", "/task_tree_planner.html"):
+            filepath = os.path.join(BASE_DIR, "task_tree_planner.html")
+        elif path.startswith("/images/"):
+            filepath = os.path.normpath(os.path.join(IMAGES_DIR, path[len("/images/"):]))
+            if not filepath.startswith(IMAGES_DIR + os.sep):
+                self.send_error(403); return
+        else:
+            self.send_error(404, f"Not found: {path}"); return
+        if not os.path.isfile(filepath):
+            self.send_error(404, f"Not found: {path}"); return
+        ext = os.path.splitext(filepath)[1].lower()
+        with open(filepath, "rb") as f:
+            body = f.read()
+        headers = [("Cache-Control", "no-cache")] if ext == ".html" else []
+        if ext == ".svg":
+            headers.append(("Content-Security-Policy", "script-src 'none'"))
+        self._send(200, body, MIME_TYPES.get(ext, "application/octet-stream"), headers)
+
+    # ── Login ────────────────────────────────────────────────────────────────
+
+    def _login(self, body):
+        try:
+            payload  = json.loads(body)
+            username = payload.get("username", "")
+            pw       = payload.get("password", "")
+        except Exception:
+            self._json(400, {"ok": False, "error": "Bad request"}); return
+
+        if check_credentials(username, pw):
+            token  = create_session(username.strip().lower())
+            cookie = http.cookies.SimpleCookie()
+            cookie[COOKIE_NAME] = token
+            cookie[COOKIE_NAME]["httponly"] = True
+            cookie[COOKIE_NAME]["samesite"] = "Strict"
+            cookie[COOKIE_NAME]["max-age"]  = SESSION_TTL
+            cookie[COOKIE_NAME]["path"]     = "/"
+            self._send(200, b'{"ok":true}', "application/json",
+                       [("Set-Cookie", cookie[COOKIE_NAME].OutputString())])
+            print(f"  [auth] Login successful: '{username}' from {self.address_string()}")
+        else:
+            print(f"  [auth] Failed login for '{username}' from {self.address_string()}")
+            self._json(401, {"ok": False, "error": "Incorrect username or password"})
+
+    # ── API ──────────────────────────────────────────────────────────────────
 
     def _handle_api(self, method, path, qs, body):
         try:
@@ -967,11 +1261,22 @@ class Handler(BaseHTTPRequestHandler):
         self._json(status, payload)
 
     def _route_api(self, method, path, qs, body):
-        parts = [unquote(p) for p in path.strip("/").split("/")]   # ["api", "nodes", id?, action?]
-        if parts[:2] != ["api", "nodes"] or len(parts) > 4:
-            raise ApiError(404, "Not found")
-        node_id = parts[2] if len(parts) >= 3 else None
-        action  = parts[3] if len(parts) == 4 else None
+        parts = [unquote(p) for p in path.strip("/").split("/")][1:]   # drop "api"
+        route = parts[0] if parts else ""
+
+        # Non-JSON / non-data endpoints
+        if (method, route) == ("POST", "images") and len(parts) == 1:
+            return self._upload_image(body)
+        if method == "GET" and len(parts) == 1:
+            if route == "instance":
+                return 200, {"instance_name": INSTANCE_NAME}
+            if route == "me":
+                return 200, {"username": self._identity() or ""}
+            if route == "geolocate":
+                geo = geolocate_by_ip()
+                return (200, {"ok": True, **geo}) if geo else (500, {"ok": False, "error": "Geolocation failed"})
+            if route == "weather":
+                return self._weather(qs)
 
         payload = {}
         if body:
@@ -991,196 +1296,105 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(400, "if_revision must be an integer")
         user = self._identity() or None
 
-        def require(d):
-            if node_id not in d["nodes"]:
-                raise ApiError(404, f"node '{node_id}' not found")
-            return d["nodes"][node_id]
-
-        # GET /api/nodes  ·  GET /api/nodes/{id}?depth=N
-        if method == "GET" and not action:
-            with DATA_LOCK:
-                d = read_data()
-            if node_id is None:
-                return 200, {"ok": True, "revision": d["revision"],
-                             "root_ids": d["settings"]["root_ids"], "nodes": d["nodes"]}
-            require(d)
-            depth = None
-            if "depth" in qs:
-                try:
-                    depth = int(qs["depth"][0])
-                except ValueError:
-                    raise ApiError(400, "depth must be an integer")
-            return 200, {"ok": True, "revision": d["revision"], "node": subtree_view(d, node_id, depth)}
-
-        # POST /api/nodes  {parent_id, position?, node: {..., children: [...]}}
-        if method == "POST" and node_id is None:
-            if "parent_id" not in payload:
-                raise ApiError(400, "parent_id is required (use null for top level)")
-            if not isinstance(payload.get("node"), dict):
-                raise ApiError(400, "node must be an object")
-            parent_id = payload["parent_id"]
-            position  = _parse_position(payload.get("position"))
-            res = mutate(lambda d: create_subtree(d, parent_id, position, payload["node"], user), if_revision)
-            return 201, res
-
-        # PATCH /api/nodes/{id}  {fields..., type?, cascade?}
-        if method == "PATCH" and node_id and not action:
-            new_type = payload.pop("type", None)
-            cascade  = payload.pop("cascade", True)
-            if new_type is not None and new_type not in TYPE_ORDER:
-                raise ApiError(400, f"type must be one of {TYPE_ORDER}")
-            if not isinstance(cascade, bool):
-                raise ApiError(400, "cascade must be a boolean")
-            fields = clean_fields(payload)
-            if not fields and new_type is None:
-                raise ApiError(400, "nothing to update")
-
-            def patch(d):
-                node = require(d)
-                f = dict(fields)
-                status = f.pop("status", None)
-                if "relates_to" in f:
-                    f["relates_to"] = resolve_relates(d, node_id, f["relates_to"])
-                node.update(f)
-                if status is not None and status != node.get("status"):
-                    apply_status(node, status, user)
-                if new_type is not None and new_type != node.get("type"):
-                    change_type(d, node, new_type, cascade)
-                return {"node": node}
-            return 200, mutate(patch, if_revision)
-
-        # POST /api/nodes/{id}/move  {parent_id, position?}
-        if method == "POST" and node_id and action == "move":
-            if "parent_id" not in payload:
-                raise ApiError(400, "parent_id is required (use null for top level)")
-            parent_id = payload["parent_id"]
-            position  = _parse_position(payload.get("position"))
-
-            def move(d):
-                node = require(d)
-                if parent_id is not None:
-                    if parent_id not in d["nodes"]:
-                        raise ApiError(404, f"parent '{parent_id}' not found")
-                    if parent_id in collect_descendants(d, node_id):
-                        raise ApiError(400, "cannot move a node under itself or its descendants")
-                detach(d, node)
-                attach(d, node, parent_id, position)
-                return {"node": node}
-            return 200, mutate(move, if_revision)
-
-        # DELETE /api/nodes/{id}  — cascades to descendants
-        if method == "DELETE" and node_id and not action:
-            def delete(d):
-                node = require(d)
-                doomed = collect_descendants(d, node_id)
-                detach(d, node)
-                for nid in doomed:
-                    del d["nodes"][nid]
-                gone = set(doomed)
-                for n in d["nodes"].values():
-                    n["relates_to"] = [x for x in n.get("relates_to") or [] if x not in gone]
-                return {"deleted": doomed}
-            return 200, mutate(delete, if_revision)
-
-        raise ApiError(405, f"{method} not supported on {path}")
-
-    def do_POST(self):
-        if not self._ip_allowed():
-            self.send_error(403, "Forbidden")
-            return
-
-        body = self._read_body()
-        if body is None:
-            return
-
-        if self.path == "/do-login":
+        def int_param(name, default):
             try:
-                payload  = json.loads(body)
-                username = payload.get("username", "")
-                pw       = payload.get("password", "")
-            except Exception:
-                self._json(400, {"ok": False, "error": "Bad request"}); return
+                return int(qs[name][0]) if name in qs else default
+            except ValueError:
+                raise ApiError(400, f"{name} must be an integer")
 
-            if check_credentials(username, pw):
-                token  = create_session(username.strip().lower())
-                cookie = http.cookies.SimpleCookie()
-                cookie[COOKIE_NAME] = token
-                cookie[COOKIE_NAME]["httponly"] = True
-                cookie[COOKIE_NAME]["samesite"] = "Strict"
-                cookie[COOKIE_NAME]["max-age"]  = SESSION_TTL
-                cookie[COOKIE_NAME]["path"]     = "/"
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Set-Cookie", cookie[COOKIE_NAME].OutputString())
-                self.end_headers()
-                self.wfile.write(b'{"ok":true}')
-                print(f"  [auth] Login successful: '{username}' from {self.address_string()}")
-            else:
-                print(f"  [auth] Failed login for '{username}' from {self.address_string()}")
-                self._json(401, {"ok": False, "error": "Incorrect username or password"})
-            return
+        # Whole document
+        if route == "data" and len(parts) == 1:
+            if method == "GET":
+                return 200, full_data()
+            if method == "PUT":
+                doc = prepare_import(payload)
+                return 200, mutate(lambda d: op_replace(d, doc, user), if_revision, reset=True)
 
-        if not self._authed():
-            self._json(401, {"ok": False, "error": "Unauthorized"}); return
+        # Incremental sync / long-poll:  GET /api/changes?since=N&wait=S
+        if (method, route) == ("GET", "changes") and len(parts) == 1:
+            if "since" not in qs:
+                raise ApiError(400, "since is required")
+            since = int_param("since", 0)
+            wait = max(0, min(int_param("wait", 0), MAX_POLL_WAIT))
+            return 200, wait_for_changes(since, wait)
 
-        req_path = urlparse(self.path).path
-        if req_path == "/api/nodes" or req_path.startswith("/api/nodes/"):
-            self._handle_api("POST", req_path, parse_qs(urlparse(self.path).query), body)
-            return
+        # Atomic list of operations:  POST /api/batch {ops: [...]}
+        if (method, route) == ("POST", "batch") and len(parts) == 1:
+            ops = payload.get("ops")
+            return 200, mutate(lambda d: op_batch(d, ops, user), if_revision)
 
-        if self.path == "/save":
-            # Whole-document save from the UI. A payload carrying "revision" must match the
-            # stored one, so a stale tab can't overwrite API/other-tab writes. Payloads
-            # without it (old tabs) are accepted as before.
-            try:
-                parsed = json.loads(body)
-            except ValueError as e:
-                self._json(400, {"ok": False, "error": str(e)}); return
-            if not isinstance(parsed, dict) or not isinstance(parsed.get("nodes"), dict) \
-                    or not isinstance(parsed.get("settings", {}).get("root_ids"), list):
-                self._json(400, {"ok": False, "error": "Invalid data format"}); return
-            try:
+        # Nodes (REST)
+        if route == "nodes" and len(parts) <= 3:
+            node_id = parts[1] if len(parts) >= 2 else None
+            action  = parts[2] if len(parts) == 3 else None
+
+            if method == "GET" and not action:
                 with DATA_LOCK:
-                    current = read_data()["revision"]
-                    sent = parsed.get("revision")
-                    if sent is not None and sent != current:
-                        self._json(409, {"ok": False, "error": "conflict", "revision": current}); return
-                    parsed["revision"] = current + 1
-                    write_data(parsed)
-                self._json(200, {"ok": True, "revision": parsed["revision"]})
-            except ApiError as e:
-                self._json(e.status, {"ok": False, "error": e.error})
+                    d = current_data()
+                    if node_id is None:
+                        return 200, RawJson({"ok": True, "revision": d["revision"],
+                                             "root_ids": d["settings"]["root_ids"], "nodes": d["nodes"]})
+                    _require_node(d, node_id)
+                    depth = int_param("depth", None)
+                    return 200, RawJson({"ok": True, "revision": d["revision"],
+                                         "node": subtree_view(d, node_id, depth)})
+            if method == "POST" and node_id is None:
+                return 201, mutate(lambda d: op_create(d, payload, user), if_revision)
+            if method == "PATCH" and node_id and not action:
+                args = {"id": node_id, "set": {k: v for k, v in payload.items() if k not in ("type", "cascade")}}
+                for k in ("type", "cascade"):
+                    if k in payload:
+                        args[k] = payload[k]
+                return 200, mutate(lambda d: op_update(d, args, user), if_revision)
+            if method == "POST" and node_id and action == "move":
+                return 200, mutate(lambda d: op_move(d, {**payload, "id": node_id}, user), if_revision)
+            if method == "DELETE" and node_id and not action:
+                return 200, mutate(lambda d: op_delete(d, {"id": node_id}, user), if_revision)
+
+        raise ApiError(404, f"no API route for {method} {path}")
+
+    def _upload_image(self, body):
+        ct = self.headers.get("Content-Type", "")
+        if "boundary=" not in ct:
+            raise ApiError(400, "Missing boundary")
+        parts = parse_multipart(body, ct.split("boundary=")[-1].strip().encode())
+        if "file" not in parts:
+            raise ApiError(400, "No file field")
+        filename, file_data = parts["file"]
+        filename = os.path.basename(filename or "")
+        if not filename:
+            raise ApiError(400, "No filename")
+        if os.path.splitext(filename)[1].lower() not in IMAGE_EXTS:
+            raise ApiError(400, f"Only image files are allowed ({', '.join(sorted(IMAGE_EXTS))})")
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        with open(os.path.join(IMAGES_DIR, filename), "wb") as f:
+            f.write(file_data)
+        return 200, {"ok": True, "path": f"images/{filename}"}
+
+    def _weather(self, qs):
+        global _weather_cache
+        try:
+            lat, lon = float(qs["lat"][0]), float(qs["lon"][0])
+        except (KeyError, ValueError):
+            raise ApiError(400, "lat/lon required")
+        now = time.time()
+        cache_hit = (
+            _weather_cache.get("fetched_at", 0) + CACHE_TTL > now
+            and abs(_weather_cache.get("lat", 0) - lat) < 0.1
+            and abs(_weather_cache.get("lon", 0) - lon) < 0.1
+        )
+        if not cache_hit:
+            try:
+                forecast = fetch_weather(lat, lon)
+                _weather_cache = {"fetched_at": now, "lat": lat, "lon": lon, "forecast": forecast}
+                merge_forecast_into_history(forecast)
+                print(f"  [weather] Fetched {len(forecast)} days for {lat:.2f},{lon:.2f}")
             except Exception as e:
-                self._json(500, {"ok": False, "error": str(e)})
-            return
-
-        if self.path == "/upload-image":
-            ct = self.headers.get("Content-Type", "")
-            if "boundary=" not in ct:
-                self._json(400, {"ok": False, "error": "Missing boundary"}); return
-            boundary   = ct.split("boundary=")[-1].strip().encode()
-            parts      = parse_multipart(body, boundary)
-            if "file" not in parts:
-                self._json(400, {"ok": False, "error": "No file field"}); return
-            filename, file_data = parts["file"]
-            if not filename:
-                self._json(400, {"ok": False, "error": "No filename"}); return
-            filename = os.path.basename(filename)
-            os.makedirs(IMAGES_DIR, exist_ok=True)
-            dest = os.path.join(IMAGES_DIR, filename)
-            with open(dest, "wb") as f: f.write(file_data)
-            self._json(200, {"ok": True, "path": f"images/{filename}"})
-            return
-
-        self.send_error(404)
-
-    def _json(self, status, payload):
-        body = json.dumps(payload, ensure_ascii=False).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+                print(f"  [weather] Fetch failed: {e}")
+                if "forecast" not in _weather_cache:
+                    return 500, {"ok": False, "error": str(e)}
+        return 200, {"ok": True, "forecast": _weather_cache["forecast"],
+                     "history": load_weather_history(), "cached": cache_hit}
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

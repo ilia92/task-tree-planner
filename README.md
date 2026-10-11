@@ -45,10 +45,10 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 - Searchable "Move to" and "Relates to" pickers — type to filter; in "Move to", use ↑ / ↓ / Enter to navigate and pick a match without the mouse
 
 ### 💾 Data
-- All data saved to `data.json` alongside the HTML (auto-save on every change)
+- All data saved to `data.json` alongside the HTML; every change is saved instantly through the [API](#api)
+- **Live sync**: edits from other users, tabs and scripts appear within a second, with no reload and no overwriting each other
 - Images uploaded directly to `images/` on the server
 - Import / Export JSON at any time
-- Works as `file://` with localStorage fallback (no server needed for basic use)
 
 ---
 
@@ -110,7 +110,7 @@ task-tree-planner/
 ├── server.py                # Minimal Python HTTP server
 ├── backup_tasks.sh          # Hourly backup script (optional)
 ├── config.json.example      # Config template — copy to config.json and edit
-├── data.json                # Your task data (created on first save)
+├── data.json                # Your task data (created on first save; written only by the server)
 └── images/                  # Uploaded images (created automatically)
 ```
 
@@ -193,7 +193,7 @@ The server uses a **session cookie** authentication system with multi-user suppo
 - Users are stored in `config.json` as `{ "users": { "alice": "<sha256>", "bob": "<sha256>" } }`
 - On successful login a random 64-character session token is set as an `HttpOnly` cookie
 - Sessions expire after **7 days**
-- All routes except `/login` require a valid session (or an [API token](#write-api)). Unauthenticated page requests redirect to the login page, and `/api/*` requests get a `401`
+- All routes except `/login` require a valid session (or an [API token](#api)). Unauthenticated page requests redirect to the login page, and `/api/*` requests get a `401`
 - Passwords are validated with `secrets.compare_digest` (constant-time, safe against timing attacks)
 - Failed login attempts are logged with the IP address but never the attempted password
 - **Add `config.json` to `.gitignore`** if you push to a public repo
@@ -202,13 +202,13 @@ The server uses a **session cookie** authentication system with multi-user suppo
 config.json  ← contains usernames + password/token hashes, never commit this
 ```
 
-Only `task_tree_planner.html`, `data.json` and files under `images/` are served as static files. `config.json`, the server source, logs and the allowlist are never served.
+Only `task_tree_planner.html` and files under `images/` (image types only) are served as static files. Data goes through the API. `config.json`, `data.json`, the server source, logs and the allowlist are never served directly.
 
 ---
 
-## Write API
+## API
 
-A JSON API under `/api/nodes` lets scripts and integrations read and change the tree, including creating whole nested subtrees in one call.
+Everything goes through a JSON API under `/api/`: the web UI itself, scripts and integrations. You can read and change the tree, create whole nested subtrees in one call, and follow changes live.
 
 ### Auth
 
@@ -228,6 +228,8 @@ Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP 
 
 ### Endpoints
 
+**Nodes**
+
 | Method | Path | Body | Effect |
 |---|---|---|---|
 | GET | `/api/nodes` | — | `{revision, root_ids, nodes}` |
@@ -236,6 +238,25 @@ Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP 
 | PATCH | `/api/nodes/{id}` | fields, `type?`, `cascade?` | Partial update. Changing `type` also shifts descendants unless `cascade: false` |
 | POST | `/api/nodes/{id}/move` | `{parent_id, position?}` | Reparents or reorders. Moving a node under itself or one of its descendants is rejected |
 | DELETE | `/api/nodes/{id}` | — | Deletes the node and all descendants, and removes them from every `relates_to` |
+
+**Whole document, batches and sync**
+
+| Method | Path | Body | Effect |
+|---|---|---|---|
+| GET | `/api/data` | — | The full document: `{version, revision, settings, nodes}` |
+| PUT | `/api/data` | full document | Replaces everything (Import). Dangling references are repaired and legacy fields migrated |
+| POST | `/api/batch` | `{ops: [...]}` | Applies a list of operations atomically, all or none (see below) |
+| GET | `/api/changes?since=N&wait=S` | — | What changed since revision `N`. With `wait`, it long-polls for up to `S` seconds (max 30) until something changes |
+| POST | `/api/images` | multipart `file` | Uploads an image to `images/`. Returns `{path}` |
+
+Batch operations, each with an `op` field:
+- `{"op": "create", "parent_id", "position"?, "node"}`
+- `{"op": "update", "id", "set": {fields}, "type"?, "cascade"?}`
+- `{"op": "move", "id", "parent_id", "position"?}`
+- `{"op": "delete", "id"}`
+- `{"op": "reserve_date", "date", "reserved": true|false}`
+
+The response has one entry per op in `results`, in order. An error names the op that failed, e.g. `ops[2] (move): ...`.
 
 Editable fields:
 - `name`, `description`, `image`
@@ -275,11 +296,26 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 - **New IDs come back in the response.** `ids` maps payload paths to new IDs. Any node can carry a `ref` label, which other nodes in the same payload can use in `relates_to`. The `refs` map in the response translates labels to IDs.
 - **Limits:** 1000 nodes and 32 levels per request.
 
-### Concurrency
+### Revisions, sync and concurrency
 
-Every write bumps a `revision` counter stored in `data.json`. All writes are serialized and written atomically, through a temp file and a rename.
-- **API writes:** add `"if_revision": N` to the body, or `?if_revision=N` on DELETE. The server answers `409 {"error":"conflict","revision":current}` if the data changed since you read it.
-- **The UI:** it sends its revision on every save. If the API or another tab changed the data in the meantime, the UI reloads and asks you to redo your last edit instead of silently overwriting. It also picks up API changes when the tab regains focus.
+The server is the single source of truth. It keeps the data in memory and writes `data.json` atomically (temp file plus rename) on every change. Writes are serialized, and each one bumps a `revision` counter.
+
+Every write response looks like `{ok, since, revision, changes: {nodes, deleted, settings?}, ...}`:
+- `changes` holds the latest state of every node the write touched.
+- `since` and `revision` are the revisions before and after the write.
+
+To stay in sync, a client keeps the revision it has and calls `GET /api/changes?since=<revision>&wait=25` in a loop.
+- **Normal case:** the response holds the latest state of every node touched since then, plus `settings` if they changed. Applying it is idempotent.
+- **Reset:** when the server can't cover the gap (after a restart, an import, or someone editing `data.json` by hand), it answers `{reset: true, data}` with the full document instead.
+
+**The web UI uses exactly this:**
+- Each change is applied on screen immediately.
+- The matching operations are sent through an in-order queue, and the server's result is then merged in.
+- Edits from other users, tabs and scripts stream in through the long-poll.
+- The Edit dialog only sends fields you actually changed, so a change someone else made to another field while the dialog was open isn't overwritten.
+- If a write is rejected, the UI reloads the data from the server.
+
+**Optimistic concurrency for scripts:** add `"if_revision": N` to a write body, or `?if_revision=N` on DELETE. The server answers `409 {"error":"conflict","revision":current}` if anything changed since revision `N`.
 
 ## Running as a systemd service
 
