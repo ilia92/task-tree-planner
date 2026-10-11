@@ -1525,9 +1525,9 @@
     }
 
     // ── Save indicator ───────────────────────────────────────────────────────
-    function showSaveIndicator(ok) {
+    function showSaveIndicator(ok, message) {
       const el = document.getElementById('save-indicator');
-      el.textContent = ok ? '✓ Saved' : '⚠ Save failed';
+      el.textContent = message || (ok ? '✓ Saved' : '⚠ Save failed');
       el.className = 'save-indicator show' + (ok ? '' : ' error');
       clearTimeout(el._t);
       el._t = setTimeout(() => el.classList.remove('show'), ok ? 1600 : 3500);
@@ -1536,19 +1536,81 @@
     // ── Server persistence ───────────────────────────────────────────────────
     const IS_HTTP = location.protocol === 'http:' || location.protocol === 'https:';
 
+    // Saves are serialized: each carries data.revision, and the server rejects a stale
+    // revision with 409 (the data was changed via the API or another tab). Changes made
+    // while a save is in flight are sent in one follow-up save.
+    let saveInFlight = false;
+    let saveQueued = false;
+
     async function serverSave() {
       if (!IS_HTTP) return;
+      if (saveInFlight) { saveQueued = true; return; }
+      saveInFlight = true;
       try {
-        const resp = await fetch('/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        showSaveIndicator(resp.ok);
+        do {
+          saveQueued = false;
+          const resp = await fetch('/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          if (resp.status === 409) {
+            saveQueued = false;
+            await reloadFromServer();
+            showSaveIndicator(false, '⚠ Changed elsewhere — reloaded; redo your last edit');
+            return;
+          }
+          if (resp.ok) {
+            const json = await resp.json().catch(() => ({}));
+            if (Number.isInteger(json.revision)) data.revision = json.revision;
+          }
+          showSaveIndicator(resp.ok);
+          if (!resp.ok) return;
+        } while (saveQueued);
       } catch {
         showSaveIndicator(false);
+      } finally {
+        saveInFlight = false;
       }
     }
+
+    async function fetchServerData() {
+      const resp = await fetch('data.json', { cache: 'no-store' });
+      if (!resp.ok) return null;
+      const parsed = await resp.json();
+      return (parsed?.nodes && parsed?.settings?.root_ids) ? parsed : null;
+    }
+
+    async function reloadFromServer() {
+      try {
+        const parsed = await fetchServerData();
+        if (!parsed) return false;
+        data = parsed;
+        migrateData();
+        render();
+        return true;
+      } catch { return false; }
+    }
+
+    // Pick up writes made via the API (or another tab) when this tab regains focus.
+    // Skipped while a save is in flight or the Edit dialog is open, so local work isn't replaced.
+    async function refreshIfChanged() {
+      if (!IS_HTTP || saveInFlight || addState.open) return;
+      try {
+        const parsed = await fetchServerData();
+        if (!parsed || saveInFlight || saveQueued || addState.open) return;
+        if ((parsed.revision || 0) > (data.revision || 0)) {
+          data = parsed;
+          migrateData();
+          render();
+          showSaveIndicator(true, '↻ Updated from server');
+        }
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshIfChanged();
+    });
+    window.addEventListener('focus', refreshIfChanged);
 
     async function serverUploadImage(file) {
       const fd = new FormData();
@@ -1579,7 +1641,7 @@
     async function initData() {
       if (IS_HTTP) {
         try {
-          const resp = await fetch('data.json');
+          const resp = await fetch('data.json', { cache: 'no-store' });
           if (resp.ok) {
             const parsed = await resp.json();
             if (parsed?.nodes && parsed?.settings?.root_ids) {
@@ -3654,6 +3716,8 @@
         try {
           const parsed = JSON.parse(String(reader.result));
           if (!parsed?.nodes || !parsed?.settings?.root_ids) throw new Error('Invalid format');
+          // Keep the server's revision so the import overwrites the current data instead of 409-ing.
+          parsed.revision = data.revision;
           data = parsed;
           migrateData();
           saveState();
