@@ -1533,133 +1533,213 @@
       el._t = setTimeout(() => el.classList.remove('show'), ok ? 1600 : 3500);
     }
 
-    // ── Server persistence ───────────────────────────────────────────────────
+    // ── Server sync ──────────────────────────────────────────────────────────
+    // The server owns the data; everything goes through /api. User actions update
+    // `data` locally right away (optimistic), then send the matching API operations
+    // through a FIFO queue so they reach the server in order. When the queue drains,
+    // the server's authoritative versions of the touched nodes are merged in. A
+    // long-poll on /api/changes streams in edits made by other users, tabs and scripts.
+    // If a write fails, the local copy is reloaded from the server.
     const IS_HTTP = location.protocol === 'http:' || location.protocol === 'https:';
 
-    // Saves are serialized: each carries data.revision, and the server rejects a stale
-    // revision with 409 (the data was changed via the API or another tab). Changes made
-    // while a save is in flight are sent in one follow-up save.
-    let saveInFlight = false;
-    let saveQueued = false;
+    class ApiFailure extends Error {
+      constructor(status, message) { super(message); this.status = status; }
+    }
 
-    async function serverSave() {
-      if (!IS_HTTP) return;
-      if (saveInFlight) { saveQueued = true; return; }
-      saveInFlight = true;
+    async function api(method, path, body) {
+      const opts = { method, cache: 'no-store', headers: {} };
+      if (body !== undefined) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      let resp;
+      try { resp = await fetch(path, opts); }
+      catch { throw new ApiFailure(0, 'Server unreachable'); }
+      if (resp.status === 401) {
+        location.href = '/login';
+        throw new ApiFailure(401, 'Session expired');
+      }
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json.ok === false) throw new ApiFailure(resp.status, json.error || `HTTP ${resp.status}`);
+      return json;
+    }
+
+    // Replace the whole local copy with a full document from the server.
+    function replaceData(doc) {
+      const { ok, ...rest } = doc;
+      data = rest;
+      migrateData();
+    }
+
+    // Merge a change set {nodes, deleted, settings?} — each entry is the latest server state.
+    function mergeChanges(changes) {
+      if (!changes) return;
+      Object.entries(changes.nodes || {}).forEach(([id, n]) => { data.nodes[id] = n; });
+      (changes.deleted || []).forEach(id => { delete data.nodes[id]; });
+      if (changes.settings) data.settings = changes.settings;
+    }
+
+    function combineChanges(a, b) {
+      if (!a) return b;
+      const out = { nodes: { ...a.nodes }, deleted: [...a.deleted], settings: b.settings || a.settings };
+      Object.entries(b.nodes || {}).forEach(([id, n]) => {
+        out.nodes[id] = n;
+        out.deleted = out.deleted.filter(x => x !== id);
+      });
+      (b.deleted || []).forEach(id => {
+        delete out.nodes[id];
+        if (!out.deleted.includes(id)) out.deleted.push(id);
+      });
+      return out;
+    }
+
+    async function fullReload() {
+      replaceData(await api('GET', '/api/data'));
+    }
+
+    // Apply a /api/changes response. Returns true if anything changed locally.
+    function applySyncResponse(res) {
+      if (res.reset) { replaceData(res.data); return true; }
+      if (res.since !== data.revision || res.revision < data.revision) return false;
+      const changed = res.revision !== data.revision;
+      mergeChanges(res.changes);
+      data.revision = res.revision;
+      if (changed) migrateData();
+      return changed;
+    }
+
+    // ── Write queue ──
+    let writeChain = Promise.resolve();
+    let pendingWrites = 0;
+    let pendingChanges = null;   // server change sets waiting for the queue to drain
+    let needSync = false;        // someone else wrote between our writes — catch up after draining
+    let needFullReload = false;  // a write failed — local optimistic state can't be trusted
+    let drainWaiters = [];
+
+    function waitForDrain() {
+      return pendingWrites ? new Promise(r => drainWaiters.push(r)) : Promise.resolve();
+    }
+
+    // Send ops (see POST /api/batch) after the optimistic local update. Resolves to the
+    // server result, or null if the write failed (the local copy is then reloaded).
+    function persist(ops) {
+      if (!IS_HTTP || !ops.length) return Promise.resolve(null);
+      pendingWrites++;
+      const job = writeChain.then(async () => {
+        try {
+          const res = await api('POST', '/api/batch', { ops });
+          pendingChanges = combineChanges(pendingChanges, res.changes);
+          if (res.since === data.revision) data.revision = res.revision;
+          else needSync = true;
+          showSaveIndicator(true);
+          return res;
+        } catch (e) {
+          needFullReload = true;
+          showSaveIndicator(false, `⚠ Not saved: ${e.message}`);
+          return null;
+        } finally {
+          if (--pendingWrites === 0) await settleWrites();
+        }
+      });
+      writeChain = job.catch(() => {});
+      return job;
+    }
+
+    async function settleWrites() {
       try {
-        do {
-          saveQueued = false;
-          const resp = await fetch('/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-          });
-          if (resp.status === 409) {
-            saveQueued = false;
-            await reloadFromServer();
-            showSaveIndicator(false, '⚠ Changed elsewhere — reloaded; redo your last edit');
-            return;
+        if (needFullReload) {
+          pendingChanges = null;
+          needSync = false;
+          await fullReload();
+          needFullReload = false;
+        } else {
+          mergeChanges(pendingChanges);
+          pendingChanges = null;
+          migrateData();
+          if (needSync) {
+            needSync = false;
+            applySyncResponse(await api('GET', `/api/changes?since=${data.revision}`));
           }
-          if (resp.ok) {
-            const json = await resp.json().catch(() => ({}));
-            if (Number.isInteger(json.revision)) data.revision = json.revision;
+        }
+      } catch (e) {
+        showSaveIndicator(false, `⚠ ${e.message} — retrying`);
+      }
+      render();
+      const waiters = drainWaiters;
+      drainWaiters = [];
+      waiters.forEach(r => r());
+    }
+
+    // ── Live updates (long-poll) ──
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function whenVisible() {
+      if (!document.hidden) return Promise.resolve();
+      return new Promise(resolve => {
+        const onChange = () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', onChange);
+          resolve();
+        };
+        document.addEventListener('visibilitychange', onChange);
+      });
+    }
+
+    async function pollLoop() {
+      let backoff = 1000;
+      let offline = false;
+      for (;;) {
+        await whenVisible();           // hidden tabs stop polling and catch up when shown
+        await waitForDrain();
+        try {
+          if (needFullReload) {
+            await fullReload();
+            needFullReload = false;
+            render();
           }
-          showSaveIndicator(resp.ok);
-          if (!resp.ok) return;
-        } while (saveQueued);
-      } catch {
-        showSaveIndicator(false);
-      } finally {
-        saveInFlight = false;
+          const since = data.revision;
+          const res = await api('GET', `/api/changes?since=${since}&wait=25`);
+          if (offline) { offline = false; showSaveIndicator(true, '✓ Reconnected'); }
+          backoff = 1000;
+          // Local writes landed meanwhile — their results are newer; poll again from there.
+          if (pendingWrites || data.revision !== since) continue;
+          if (applySyncResponse(res)) render();
+        } catch (e) {
+          if (e.status === 401) return;
+          if (!offline) { offline = true; showSaveIndicator(false, '⚠ Connection lost — retrying'); }
+          await sleep(backoff);
+          backoff = Math.min(backoff * 2, 30000);
+        }
       }
     }
-
-    async function fetchServerData() {
-      const resp = await fetch('data.json', { cache: 'no-store' });
-      if (!resp.ok) return null;
-      const parsed = await resp.json();
-      return (parsed?.nodes && parsed?.settings?.root_ids) ? parsed : null;
-    }
-
-    async function reloadFromServer() {
-      try {
-        const parsed = await fetchServerData();
-        if (!parsed) return false;
-        data = parsed;
-        migrateData();
-        render();
-        return true;
-      } catch { return false; }
-    }
-
-    // Pick up writes made via the API (or another tab) when this tab regains focus.
-    // Skipped while a save is in flight or the Edit dialog is open, so local work isn't replaced.
-    async function refreshIfChanged() {
-      if (!IS_HTTP || saveInFlight || addState.open) return;
-      try {
-        const parsed = await fetchServerData();
-        if (!parsed || saveInFlight || saveQueued || addState.open) return;
-        if ((parsed.revision || 0) > (data.revision || 0)) {
-          data = parsed;
-          migrateData();
-          render();
-          showSaveIndicator(true, '↻ Updated from server');
-        }
-      } catch {}
-    }
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshIfChanged();
-    });
-    window.addEventListener('focus', refreshIfChanged);
 
     async function serverUploadImage(file) {
       const fd = new FormData();
       fd.append('file', file);
-      const resp = await fetch('/upload-image', { method: 'POST', body: fd });
-      if (!resp.ok) throw new Error('Upload failed');
-      const json = await resp.json();
+      const resp = await fetch('/api/images', { method: 'POST', body: fd });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || !json.ok) throw new Error(json.error || 'Upload failed');
       return json.path; // e.g. "images/foo.png"
     }
 
-    // ── State helpers ────────────────────────────────────────────────────────
-    function saveState() {
-      if (IS_HTTP) {
-        serverSave(); // async, fire-and-forget
-      } else {
-        localStorage.setItem('task-tree-planner-data', JSON.stringify(data));
-      }
-    }
-
-    function loadStateLocal() {
-      try { return JSON.parse(localStorage.getItem('task-tree-planner-data')); }
-      catch { return null; }
-    }
-
     // ── Init ─────────────────────────────────────────────────────────────────
-    // HTTP: data.json is the sole source of truth (no localStorage fallback).
-    // file://: localStorage, then blank.
     async function initData() {
-      if (IS_HTTP) {
-        try {
-          const resp = await fetch('data.json', { cache: 'no-store' });
-          if (resp.ok) {
-            const parsed = await resp.json();
-            if (parsed?.nodes && parsed?.settings?.root_ids) {
-              data = parsed;
-              migrateData();
-              render();
-              return;
-            }
-          }
-        } catch (_) {}
-        data = structuredClone(emptyData);
-        render();
+      if (!IS_HTTP) {
+        document.getElementById('roots').innerHTML =
+          '<p class="subtle" style="padding:24px">Task Tree Planner needs its server — run <code>python3 server.py</code> and open <code>http://localhost:8000</code>.</p>';
         return;
       }
-      const stored = loadStateLocal();
-      data = stored || structuredClone(emptyData);
-      migrateData();
+      for (let backoff = 1000; ; backoff = Math.min(backoff * 2, 15000)) {
+        try {
+          await fullReload();
+          break;
+        } catch (e) {
+          if (e.status === 401) return;
+          showSaveIndicator(false, `⚠ Could not load data: ${e.message} — retrying`);
+          await sleep(backoff);
+        }
+      }
       render();
+      pollLoop();
     }
 
     let data = structuredClone(emptyData);
@@ -1684,7 +1764,7 @@
       } catch {
         // Browser denied or unavailable — fall back to server IP geolocation
         try {
-          const geo = await fetch('/geolocate').then(r => r.json());
+          const geo = await fetch('/api/geolocate').then(r => r.json());
           if (geo.ok) await fetchWeather(geo.lat, geo.lon);
         } catch (e) {
           console.warn('Weather unavailable:', e);
@@ -1693,7 +1773,7 @@
     }
 
     async function fetchWeather(lat, lon) {
-      const resp = await fetch(`/weather?lat=${lat}&lon=${lon}`);
+      const resp = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
       if (!resp.ok) return;
       const json = await resp.json();
       if (!json.ok) return;
@@ -1820,12 +1900,6 @@
       });
     }
 
-    function makeId(type) {
-      let idx = 1;
-      while (data.nodes[`${type}_${idx}`]) idx += 1;
-      return `${type}_${idx}`;
-    }
-
     function formatDate(date) {
       if (!date) return '—';
       const d = new Date(date + 'T12:00:00'); // avoid timezone shifting
@@ -1877,7 +1951,7 @@
       const idx = data.settings.reserved_dates.indexOf(iso);
       if (idx === -1) data.settings.reserved_dates.push(iso);
       else data.settings.reserved_dates.splice(idx, 1);
-      saveState();
+      persist([{ op: 'reserve_date', date: iso, reserved: idx === -1 }]);
       render();
     }
 
@@ -2282,7 +2356,7 @@
           data.nodes[node.id].completed_date = data.nodes[node.id].target_date || dateKey(0);
           data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
-          saveState();
+          persist([{ op: 'update', id: node.id, set: { status: 'done', collapsed: true } }]);
           render();
         });
         menu.appendChild(completeBtn);
@@ -2296,7 +2370,7 @@
           data.nodes[node.id].completed_date = data.nodes[node.id].target_date || dateKey(0);
           data.nodes[node.id].completed_by = currentUser || null;
           openMenuId = null;
-          saveState();
+          persist([{ op: 'update', id: node.id, set: { status: 'wont_do', collapsed: true } }]);
           render();
         });
         menu.appendChild(wontDoBtn);
@@ -2436,7 +2510,7 @@
         e.stopPropagation();
         data.nodes[node.id].collapsed = true;
         openMenuId = null;
-        saveState();
+        persist([{ op: 'update', id: node.id, set: { collapsed: true } }]);
         render();
       });
       return btn;
@@ -2516,7 +2590,7 @@
         expandBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           data.nodes[node.id].collapsed = false;
-          saveState();
+          persist([{ op: 'update', id: node.id, set: { collapsed: false } }]);
           render();
         });
 
@@ -3144,7 +3218,7 @@
       hidePeekPopup();
       const node = data.nodes[nodeId];
       if (!node) return;
-      addState = { open: true, anchorId: node.parent_id, mode: 'edit', editId: nodeId };
+      addState = { open: true, anchorId: node.parent_id, mode: 'edit', editId: nodeId, original: structuredClone(node) };
       renderAncestorPath(nodeId, node.parent_id);
       document.getElementById('modal-title').textContent = 'Edit item';
       document.getElementById('form-name').value = node.name || '';
@@ -3233,7 +3307,8 @@
       const adjustedTarget = rawIdx < targetRawIdx ? targetRawIdx - 1 : targetRawIdx;
       arr.splice(delta > 0 ? adjustedTarget + 1 : adjustedTarget, 0, nodeId);
 
-      saveState();
+      const parentId = node.parent_id && data.nodes[node.parent_id] ? node.parent_id : null;
+      persist([{ op: 'move', id: nodeId, parent_id: parentId, position: arr.indexOf(nodeId) }]);
       render();
       updateOrderControls(node);
     }
@@ -3247,7 +3322,7 @@
       }
       node.target_date = skipReservedDates(node.target_date, days);
       openMenuId = null;
-      saveState();
+      persist([{ op: 'update', id: nodeId, set: { target_date: node.target_date } }]);
       render();
     }
 
@@ -3293,7 +3368,7 @@
       if (!window.confirm(msg)) return;
 
       eligible.forEach(n => { n.target_date = skipReservedDates(n.target_date, days); });
-      saveState();
+      persist(eligible.map(n => ({ op: 'update', id: n.id, set: { target_date: n.target_date } })));
       render();
       showKbdHint(`${verbPast} ${eligible.length} item(s)`);
     }
@@ -3323,7 +3398,7 @@
       });
 
       openMenuId = null;
-      saveState();
+      persist([{ op: 'delete', id: nodeId }]);
       render();
     }
 
@@ -3332,36 +3407,71 @@
         .map(cb => cb.value);
     }
 
-    function addNode() {
+    // Form values shared by Add and Edit.
+    function readNodeForm(name) {
+      return {
+        name,
+        description: document.getElementById('form-description').value.trim(),
+        image: document.getElementById('form-image').value.trim() || null,
+        priority: Number(document.getElementById('form-priority').value),
+        status: document.getElementById('form-status').value,
+        target_date: toIsoDate(document.getElementById('form-target-date').value) || null,
+        date_fixed: document.getElementById('form-date-fixed').checked,
+        time_estimate: parseFloat(document.getElementById('form-time').value) || null,
+        relates_to: selectedRelates()
+      };
+    }
+
+    // How each field is compared when deciding what the user changed in the Edit form.
+    const formFieldNorm = {
+      description: v => v || '',
+      image: v => v || null,
+      priority: v => Number(v || 4),
+      status: v => v || 'open',
+      date_fixed: v => !!v,
+      relates_to: v => [...(v || [])].sort()
+    };
+
+    async function addNode() {
       const name = document.getElementById('form-name').value.trim();
-      if (!name) return;
+      if (!name || addState.saving) return;
 
       if (addState.mode === 'edit' && addState.editId) {
         const node = data.nodes[addState.editId];
-        if (!node) return;
-        const newStatus = document.getElementById('form-status').value;
-        const prevStatus = node.status;
-        node.name = name;
-        node.description = document.getElementById('form-description').value.trim();
-        node.image = document.getElementById('form-image').value.trim() || null;
-        node.priority = Number(document.getElementById('form-priority').value);
-        node.target_date = toIsoDate(document.getElementById('form-target-date').value) || null;
-        node.date_fixed = document.getElementById('form-date-fixed').checked;
-        node.status = newStatus;
-        // Keep completed_date in sync with status
-        if (isResolved(newStatus) && !isResolved(prevStatus)) {
-          node.completed_date = node.target_date || dateKey(0);
-          node.completed_by = currentUser || null;
-        } else if (!isResolved(newStatus)) {
-          node.completed_date = null;
-          node.completed_by = null;
+        if (!node) {
+          closeAddDialog();
+          showSaveIndicator(false, '⚠ This item was deleted elsewhere');
+          render();
+          return;
         }
-        node.time_estimate = parseFloat(document.getElementById('form-time').value) || null;
-        node.relates_to = selectedRelates();
+        // Only fields the user actually changed in the form are written, so edits made
+        // elsewhere (another user, tab or script) while the dialog was open survive.
+        const orig = addState.original || node;
+        const form = readNodeForm(name);
+        const set = {};
+        Object.entries(form).forEach(([key, value]) => {
+          const norm = formFieldNorm[key] || (v => v ?? null);
+          if (JSON.stringify(norm(value)) !== JSON.stringify(norm(orig[key]))) set[key] = value;
+        });
+
+        const prevStatus = node.status;
+        Object.assign(node, set);
+        // Keep completed_date in sync with status (the server applies the same rule)
+        if ('status' in set) {
+          if (isResolved(set.status) && !isResolved(prevStatus)) {
+            node.completed_date = node.target_date || dateKey(0);
+            node.completed_by = currentUser || null;
+          } else if (!isResolved(set.status)) {
+            node.completed_date = null;
+            node.completed_by = null;
+          }
+        }
+        const ops = Object.keys(set).length ? [{ op: 'update', id: node.id, set }] : [];
 
         const newParentValue = document.getElementById('form-parent').value;
+        const origParentValue = orig.parent_id || ROOT_SENTINEL;
         const currentParentValue = node.parent_id || ROOT_SENTINEL;
-        if (newParentValue && newParentValue !== currentParentValue) {
+        if (newParentValue && newParentValue !== origParentValue && newParentValue !== currentParentValue) {
           const oldParent = data.nodes[node.parent_id];
           if (oldParent) {
             oldParent.children = (oldParent.children || []).filter(id => id !== node.id);
@@ -3372,6 +3482,7 @@
             if (!data.settings.root_ids) data.settings.root_ids = [];
             data.settings.root_ids.push(node.id);
             node.parent_id = null;
+            ops.push({ op: 'move', id: node.id, parent_id: null });
           } else {
             const newParent = data.nodes[newParentValue];
             if (newParent) {
@@ -3379,22 +3490,24 @@
               newParent.children.push(node.id);
               newParent.collapsed = false;
               node.parent_id = newParentValue;
+              ops.push({ op: 'move', id: node.id, parent_id: newParentValue });
             }
           }
         }
 
         const newType = document.getElementById('form-type').value;
-        if (newType && newType !== node.type) {
+        if (newType && newType !== orig.type && newType !== node.type) {
           const descCount = collectDescendants(node.id, []).length - 1;
           const msg = descCount > 0
             ? `Change "${node.name}" from ${typeLabels[node.type]} to ${typeLabels[newType]}? This will also update ${descCount} nested item(s) to keep the hierarchy consistent.`
             : `Change "${node.name}" from ${typeLabels[node.type]} to ${typeLabels[newType]}?`;
           if (window.confirm(msg)) {
             changeNodeType(node, newType, true);
+            ops.push({ op: 'update', id: node.id, type: newType, cascade: true });
           }
         }
 
-        saveState();
+        persist(ops);
         closeAddDialog();
         render();
         return;
@@ -3404,33 +3517,16 @@
       const anchor = data.nodes[addState.anchorId];
       if (!anchor) return;
 
-      const parentId = anchor.id;
+      // Creates wait for the server (it assigns the id). The dialog stays open on failure
+      // so nothing typed is lost.
       const newType = addState.overrideChildType || typeChildren[anchor.type] || 'subtask';
-      const newId = makeId(newType);
-
-      data.nodes[newId] = {
-        id: newId,
-        type: newType,
-        parent_id: parentId,
-        name,
-        description: document.getElementById('form-description').value.trim(),
-        image: document.getElementById('form-image').value.trim() || null,
-        children: [],
-        collapsed: false,
-        priority: Number(document.getElementById('form-priority').value),
-        status: document.getElementById('form-status').value,
-        target_date: toIsoDate(document.getElementById('form-target-date').value) || null,
-        date_fixed: document.getElementById('form-date-fixed').checked,
-        time_estimate: parseFloat(document.getElementById('form-time').value) || null,
-        relates_to: selectedRelates(),
-        archived: false
-      };
-
-      if (!data.nodes[parentId].children) data.nodes[parentId].children = [];
-      data.nodes[parentId].children.push(newId);
-      data.nodes[parentId].collapsed = false;
-
-      saveState();
+      const saveBtn = document.getElementById('modal-add');
+      addState.saving = true;
+      saveBtn.disabled = true;
+      const res = await persist([{ op: 'create', parent_id: anchor.id, node: { ...readNodeForm(name), type: newType } }]);
+      addState.saving = false;
+      saveBtn.disabled = false;
+      if (!res) return;
       closeAddDialog();
       render();
     }
@@ -3652,46 +3748,23 @@
 
       if (_previewObjectUrl) { URL.revokeObjectURL(_previewObjectUrl); _previewObjectUrl = null; }
 
-      if (IS_HTTP) {
-        previewEl.textContent = 'Uploading…';
-        try {
-          const savedPath = await serverUploadImage(file);
-          pathInput.value = savedPath;
-          _previewObjectUrl = URL.createObjectURL(file);
-          previewEl.innerHTML = `Saved: ${escapeHtml(savedPath)}<br><img src="${_previewObjectUrl}" alt="" class="thumb" />`;
-        } catch {
-          previewEl.textContent = '⚠ Upload failed — check that the server is running.';
-        }
-      } else {
-        pathInput.value = `images/${file.name}`;
+      previewEl.textContent = 'Uploading…';
+      try {
+        const savedPath = await serverUploadImage(file);
+        pathInput.value = savedPath;
         _previewObjectUrl = URL.createObjectURL(file);
-        previewEl.innerHTML = `Path set (copy the file manually to images/):<br>${escapeHtml(`images/${file.name}`)}<br><img src="${_previewObjectUrl}" alt="" class="thumb" />`;
+        previewEl.innerHTML = `Saved: ${escapeHtml(savedPath)}<br><img src="${_previewObjectUrl}" alt="" class="thumb" />`;
+      } catch (e) {
+        previewEl.textContent = `⚠ Upload failed: ${e.message}`;
       }
     });
 
-    document.getElementById('add-root-btn').addEventListener('click', () => {
-      const newId = makeId('space');
-      data.nodes[newId] = {
-        id: newId,
-        type: 'space',
-        parent_id: null,
-        name: `Space ${Object.keys(data.nodes).filter(id => data.nodes[id].type === 'space').length + 1}`,
-        description: '',
-        image: null,
-        children: [],
-        collapsed: false,
-        priority: 4,
-        status: 'open',
-        target_date: null,
-        time_estimate: null,
-        relates_to: [],
-        archived: false
-      };
-      if (!data.settings.root_ids) data.settings.root_ids = [];
-      data.settings.root_ids.push(newId);
-      saveState();
+    document.getElementById('add-root-btn').addEventListener('click', async () => {
+      const spaceCount = Object.values(data.nodes).filter(n => n.type === 'space').length;
+      const res = await persist([{ op: 'create', parent_id: null, node: { name: `Space ${spaceCount + 1}` } }]);
+      if (!res) return;
       render();
-      openEditDialog(newId);
+      openEditDialog(res.results[0].id);
     });
 
     document.getElementById('export-btn').addEventListener('click', () => {
@@ -3703,6 +3776,22 @@
       a.click();
       URL.revokeObjectURL(url);
     });
+
+    // Import replaces the whole document on the server (for every user), after any
+    // queued edits have been saved.
+    async function importData(doc) {
+      const count = Object.keys(doc.nodes).length;
+      if (!window.confirm(`Replace ALL current data with this file (${count} items)? This affects everyone using this planner.`)) return;
+      await waitForDrain();
+      try {
+        await api('PUT', '/api/data', doc);
+        await fullReload();
+        showSaveIndicator(true, '✓ Imported');
+      } catch (e) {
+        showSaveIndicator(false, `⚠ Import failed: ${e.message}`);
+      }
+      render();
+    }
 
     document.getElementById('import-btn').addEventListener('click', () => {
       document.getElementById('file-input').click();
@@ -3716,12 +3805,7 @@
         try {
           const parsed = JSON.parse(String(reader.result));
           if (!parsed?.nodes || !parsed?.settings?.root_ids) throw new Error('Invalid format');
-          // Keep the server's revision so the import overwrites the current data instead of 409-ing.
-          parsed.revision = data.revision;
-          data = parsed;
-          migrateData();
-          saveState();
-          render();
+          importData(parsed);
         } catch {
           alert('Invalid JSON file.');
         }
