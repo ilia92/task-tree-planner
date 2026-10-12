@@ -22,6 +22,10 @@ EXAMPLE = os.path.join(os.path.dirname(server.__file__), "example", "data.json")
 
 
 class ApiTest(unittest.TestCase):
+    def url(self, path):
+        # tests are written with short "/api/x" paths; the server only serves /api/v1/x
+        return self.base + ("/api/v1/" + path[len("/api/"):] if path.startswith("/api/") else path)
+
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         server.DATA_FILE = os.path.join(self.tmp, "data.json")
@@ -44,7 +48,7 @@ class ApiTest(unittest.TestCase):
 
     def call(self, method, path, body=None, token=TOKEN):
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.base + path, data=data, method=method)
+        req = urllib.request.Request(self.url(path), data=data, method=method)
         req.add_header("Content-Type", "application/json")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
@@ -298,7 +302,7 @@ class ApiTest(unittest.TestCase):
         def upload(name):
             body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n"
                     f"Content-Type: application/octet-stream\r\n\r\nDATA\r\n--{boundary}--\r\n").encode()
-            req = urllib.request.Request(self.base + "/api/images", data=body, method="POST")
+            req = urllib.request.Request(self.url("/api/images"), data=body, method="POST")
             req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
             req.add_header("Authorization", f"Bearer {TOKEN}")
             try:
@@ -309,6 +313,31 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(upload("evil.html"), 400)
         self.assertEqual(upload("pic.png"), 200)
         self.assertTrue(os.path.isfile(os.path.join(server.IMAGES_DIR, "pic.png")))
+
+
+    # ── versioning ───────────────────────────────────────────────────────────
+    def test_version_description(self):
+        for path in ("/api/v1", "/api/v1/"):
+            req = urllib.request.Request(self.base + path, headers={"Authorization": f"Bearer {TOKEN}"})
+            with urllib.request.urlopen(req) as r:
+                res = json.loads(r.read())
+            self.assertEqual((res["version"], res["base"]), ("v1", "/api/v1"))
+            self.assertTrue(any("/api/v1/batch" in e for e in res["endpoints"]))
+
+    def test_unsupported_version(self):
+        req = urllib.request.Request(self.base + "/api/v2/nodes", headers={"Authorization": f"Bearer {TOKEN}"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req)
+        self.assertEqual(cm.exception.code, 404)
+        self.assertIn("v2", json.loads(cm.exception.read())["error"])
+
+    def test_unversioned_paths_not_served(self):
+        for path in ("/api/nodes", "/api/data", "/api/", "/api/me"):
+            req = urllib.request.Request(self.base + path, headers={"Authorization": f"Bearer {TOKEN}"})
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req)
+            self.assertEqual(cm.exception.code, 404, path)
+            self.assertIn("/api/v1", json.loads(cm.exception.read())["error"])
 
 
 if __name__ == "__main__":

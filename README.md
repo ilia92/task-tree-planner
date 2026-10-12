@@ -193,7 +193,7 @@ The server uses a **session cookie** authentication system with multi-user suppo
 - Users are stored in `config.json` as `{ "users": { "alice": "<sha256>", "bob": "<sha256>" } }`
 - On successful login a random 64-character session token is set as an `HttpOnly` cookie
 - Sessions expire after **7 days**
-- All routes except `/login` require a valid session (or an [API token](#api)). Unauthenticated page requests redirect to the login page, and `/api/*` requests get a `401`
+- All routes except `/login` require a valid session (or an [API token](#api)). Unauthenticated page requests redirect to the login page, and `/api/v1/*` requests get a `401`
 - Passwords are validated with `secrets.compare_digest` (constant-time, safe against timing attacks)
 - Failed login attempts are logged with the IP address but never the attempted password
 - **Add `config.json` to `.gitignore`** if you push to a public repo
@@ -208,7 +208,14 @@ Only `task_tree_planner.html` and files under `images/` (image types only) are s
 
 ## API
 
-Everything goes through a JSON API under `/api/`: the web UI itself, scripts and integrations. You can read and change the tree, create whole nested subtrees in one call, and follow changes live.
+Everything goes through a JSON API under `/api/v1/`: the web UI itself, scripts and integrations. You can read and change the tree, create whole nested subtrees in one call, and follow changes live.
+
+### Versioning
+
+`/api/v1` is the stable contract.
+- **Within v1,** endpoints and response fields may be **added** but are never renamed or removed. A breaking change would go into `/api/v2`, and v1 would keep working.
+- **`GET /api/v1`** describes the version and lists the endpoints.
+- **Unversioned paths (`/api/...`) are not served.** They answer 404 with a pointer to `/api/v1`.
 
 ### Auth
 
@@ -221,7 +228,7 @@ python server.py --remove-token my-script
 ```
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/nodes
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/nodes
 ```
 
 Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP allowlist still applies. When a token resolves a task, its name is recorded as `completed_by`.
@@ -232,22 +239,22 @@ Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP 
 
 | Method | Path | Body | Effect |
 |---|---|---|---|
-| GET | `/api/nodes` | — | `{revision, root_ids, nodes}` |
-| GET | `/api/nodes/{id}?depth=N` | — | The node with `children` expanded into nested objects. Depth defaults to unlimited. At the depth limit, `children` stays a list of ids and the node gets `children_truncated: true` |
-| POST | `/api/nodes` | `{parent_id, position?, node}` | Creates a node or a nested subtree. `parent_id: null` creates it at the top level |
-| PATCH | `/api/nodes/{id}` | fields, `type?`, `cascade?` | Partial update. Changing `type` also shifts descendants unless `cascade: false` |
-| POST | `/api/nodes/{id}/move` | `{parent_id, position?}` | Reparents or reorders. Moving a node under itself or one of its descendants is rejected |
-| DELETE | `/api/nodes/{id}` | — | Deletes the node and all descendants, and removes them from every `relates_to` |
+| GET | `/api/v1/nodes` | — | `{revision, root_ids, nodes}` |
+| GET | `/api/v1/nodes/{id}?depth=N` | — | The node with `children` expanded into nested objects. Depth defaults to unlimited. At the depth limit, `children` stays a list of ids and the node gets `children_truncated: true` |
+| POST | `/api/v1/nodes` | `{parent_id, position?, node}` | Creates a node or a nested subtree. `parent_id: null` creates it at the top level |
+| PATCH | `/api/v1/nodes/{id}` | fields, `type?`, `cascade?` | Partial update. Changing `type` also shifts descendants unless `cascade: false` |
+| POST | `/api/v1/nodes/{id}/move` | `{parent_id, position?}` | Reparents or reorders. Moving a node under itself or one of its descendants is rejected |
+| DELETE | `/api/v1/nodes/{id}` | — | Deletes the node and all descendants, and removes them from every `relates_to` |
 
 **Whole document, batches and sync**
 
 | Method | Path | Body | Effect |
 |---|---|---|---|
-| GET | `/api/data` | — | The full document: `{version, revision, settings, nodes}` |
-| PUT | `/api/data` | full document | Replaces everything (Import). Dangling references are repaired and legacy fields migrated |
-| POST | `/api/batch` | `{ops: [...]}` | Applies a list of operations atomically, all or none (see below) |
-| GET | `/api/changes?since=N&wait=S` | — | What changed since revision `N`. With `wait`, it long-polls for up to `S` seconds (max 30) until something changes |
-| POST | `/api/images` | multipart `file` | Uploads an image to `images/`. Returns `{path}` |
+| GET | `/api/v1/data` | — | The full document: `{version, revision, settings, nodes}` |
+| PUT | `/api/v1/data` | full document | Replaces everything (Import). Dangling references are repaired and legacy fields migrated |
+| POST | `/api/v1/batch` | `{ops: [...]}` | Applies a list of operations atomically, all or none (see below) |
+| GET | `/api/v1/changes?since=N&wait=S` | — | What changed since revision `N`. With `wait`, it long-polls for up to `S` seconds (max 30) until something changes |
+| POST | `/api/v1/images` | multipart `file` | Uploads an image to `images/`. Returns `{path}` |
 
 Batch operations, each with an `op` field:
 - `{"op": "create", "parent_id", "position"?, "node"}`
@@ -275,7 +282,7 @@ Setting a resolved status fills `completed_date` and `completed_by`, exactly as 
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  http://localhost:8000/api/nodes -d '{
+  http://localhost:8000/api/v1/nodes -d '{
   "parent_id": "project_1",
   "position": 0,
   "node": {
@@ -304,7 +311,7 @@ Every write response looks like `{ok, since, revision, changes: {nodes, deleted,
 - `changes` holds the latest state of every node the write touched.
 - `since` and `revision` are the revisions before and after the write.
 
-To stay in sync, a client keeps the revision it has and calls `GET /api/changes?since=<revision>&wait=25` in a loop.
+To stay in sync, a client keeps the revision it has and calls `GET /api/v1/changes?since=<revision>&wait=25` in a loop.
 - **Normal case:** the response holds the latest state of every node touched since then, plus `settings` if they changed. Applying it is idempotent.
 - **Reset:** when the server can't cover the gap (after a restart, an import, or someone editing `data.json` by hand), it answers `{reset: true, data}` with the full document instead.
 

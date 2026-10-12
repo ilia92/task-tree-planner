@@ -9,7 +9,7 @@ User management:
     python server.py --remove-user    # remove a user
     python server.py --list-users     # show all usernames
 
-API tokens (for the /api/nodes write API, sent as "Authorization: Bearer <token>"):
+API tokens (for the /api/v1 API, sent as "Authorization: Bearer <token>"):
     python server.py --add-token NAME     # create a token (printed once)
     python server.py --remove-token NAME  # revoke a token
     python server.py --list-tokens        # show token names
@@ -1076,6 +1076,27 @@ def parse_multipart(data: bytes, boundary: bytes):
     return parts
 
 
+# The API is versioned: /api/v1/... is the stable contract for scripts and integrations.
+# Within v1, endpoints and response fields may be added but never renamed or removed — a breaking
+# change would go into /api/v2 while v1 keeps working. Unversioned /api/... paths are not served.
+API_VERSION = "v1"
+API_ENDPOINTS = [
+    "GET    /api/v1                    this description",
+    "GET    /api/v1/data               the full document",
+    "PUT    /api/v1/data               replace everything (import)",
+    "GET    /api/v1/changes?since=N&wait=S   changes since revision N (long-poll)",
+    "POST   /api/v1/batch              atomic list of ops: create, update, move, delete, reserve_date",
+    "GET    /api/v1/nodes              all nodes",
+    "GET    /api/v1/nodes/{id}?depth=N one node with its subtree",
+    "POST   /api/v1/nodes              create a node or nested subtree",
+    "PATCH  /api/v1/nodes/{id}         update fields / type",
+    "POST   /api/v1/nodes/{id}/move    reparent / reorder",
+    "DELETE /api/v1/nodes/{id}         delete with descendants",
+    "POST   /api/v1/images             upload an image",
+    "GET    /api/v1/me | instance | weather | geolocate",
+]
+API_CHANGES_RE = re.compile(r"^/api/(v\d+/)?changes")
+
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 MIME_TYPES = {".html": "text/html; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
               ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml"}
@@ -1093,7 +1114,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_request(self, code="-", size="-"):
         # Long-poll requests arrive every ~25 s per open tab — don't flood the log with them.
-        if self.path.startswith("/api/changes") and str(code) == "200":
+        if API_CHANGES_RE.match(self.path) and str(code) == "200":
             return
         super().log_request(code, size)
 
@@ -1262,7 +1283,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_api(self, method, path, qs, body):
         parts = [unquote(p) for p in path.strip("/").split("/")][1:]   # drop "api"
+        if not parts or not re.fullmatch(r"v\d+", parts[0]):
+            raise ApiError(404, f"The API is versioned - use /api/{API_VERSION}/...")
+        if parts[0] != API_VERSION:
+            raise ApiError(404, f"API version {parts[0]} is not supported - use /api/{API_VERSION}")
+        parts = [p for p in parts[1:] if p != ""]
         route = parts[0] if parts else ""
+        if not parts and method == "GET":
+            return 200, {"ok": True, "app": "task-tree-planner", "version": API_VERSION,
+                         "supported": [API_VERSION], "base": f"/api/{API_VERSION}",
+                         "endpoints": API_ENDPOINTS}
 
         # Non-JSON / non-data endpoints
         if (method, route) == ("POST", "images") and len(parts) == 1:
