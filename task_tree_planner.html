@@ -1594,7 +1594,7 @@
     }
 
     async function fullReload() {
-      replaceData(await api('GET', '/api/data'));
+      replaceData(await api('GET', '/api/v1/data'));
     }
 
     // Apply a /api/changes response. Returns true if anything changed locally.
@@ -1627,7 +1627,7 @@
       pendingWrites++;
       const job = writeChain.then(async () => {
         try {
-          const res = await api('POST', '/api/batch', { ops });
+          const res = await api('POST', '/api/v1/batch', { ops });
           pendingChanges = combineChanges(pendingChanges, res.changes);
           if (res.since === data.revision) data.revision = res.revision;
           else needSync = true;
@@ -1658,7 +1658,7 @@
           migrateData();
           if (needSync) {
             needSync = false;
-            applySyncResponse(await api('GET', `/api/changes?since=${data.revision}`));
+            applySyncResponse(await api('GET', `/api/v1/changes?since=${data.revision}`));
           }
         }
       } catch (e) {
@@ -1697,7 +1697,7 @@
             render();
           }
           const since = data.revision;
-          const res = await api('GET', `/api/changes?since=${since}&wait=25`);
+          const res = await api('GET', `/api/v1/changes?since=${since}&wait=25`);
           if (offline) { offline = false; showSaveIndicator(true, '✓ Reconnected'); }
           backoff = 1000;
           // Local writes landed meanwhile — their results are newer; poll again from there.
@@ -1715,7 +1715,7 @@
     async function serverUploadImage(file) {
       const fd = new FormData();
       fd.append('file', file);
-      const resp = await fetch('/api/images', { method: 'POST', body: fd });
+      const resp = await fetch('/api/v1/images', { method: 'POST', body: fd });
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok || !json.ok) throw new Error(json.error || 'Upload failed');
       return json.path; // e.g. "images/foo.png"
@@ -1764,7 +1764,7 @@
       } catch {
         // Browser denied or unavailable — fall back to server IP geolocation
         try {
-          const geo = await fetch('/api/geolocate').then(r => r.json());
+          const geo = await fetch('/api/v1/geolocate').then(r => r.json());
           if (geo.ok) await fetchWeather(geo.lat, geo.lon);
         } catch (e) {
           console.warn('Weather unavailable:', e);
@@ -1773,7 +1773,7 @@
     }
 
     async function fetchWeather(lat, lon) {
-      const resp = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      const resp = await fetch(`/api/v1/weather?lat=${lat}&lon=${lon}`);
       if (!resp.ok) return;
       const json = await resp.json();
       if (!json.ok) return;
@@ -3784,7 +3784,7 @@
       if (!window.confirm(`Replace ALL current data with this file (${count} items)? This affects everyone using this planner.`)) return;
       await waitForDrain();
       try {
-        await api('PUT', '/api/data', doc);
+        await api('PUT', '/api/v1/data', doc);
         await fullReload();
         showSaveIndicator(true, '✓ Imported');
       } catch (e) {
@@ -3853,8 +3853,8 @@
       if (!IS_HTTP) return;
       try {
         const [instRes, meRes] = await Promise.all([
-          fetch('/api/instance').then(r => r.json()),
-          fetch('/api/me').then(r => r.json()),
+          fetch('/api/v1/instance').then(r => r.json()),
+          fetch('/api/v1/me').then(r => r.json()),
         ]);
         const { instance_name } = instRes;
         if (instance_name && instance_name !== 'Task Tree Planner') {
