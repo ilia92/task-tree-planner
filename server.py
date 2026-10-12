@@ -9,10 +9,12 @@ User management:
     python server.py --remove-user    # remove a user
     python server.py --list-users     # show all usernames
 
-API tokens (for the /api/v1 API, sent as "Authorization: Bearer <token>"):
-    python server.py --add-token NAME     # create a token (printed once)
-    python server.py --remove-token NAME  # revoke a token
-    python server.py --list-tokens        # show token names
+API tokens (for the /api/v1 API, sent as "Authorization: Bearer <token>").
+Each token belongs to a user, like a password, and acts as that user:
+    python server.py --add-token NAME --user USER   # create a token for USER (printed once)
+    python server.py --bind-token NAME --user USER  # assign an existing token to USER
+    python server.py --remove-token NAME            # revoke a token
+    python server.py --list-tokens                  # show tokens and their users
 
 Run:
     python server.py [port]           # default port: 8000
@@ -36,7 +38,7 @@ from urllib.parse import unquote, urlparse, parse_qs
 from urllib.request import urlopen, Request
 
 _MGMT_FLAGS        = {"--setup", "--add-user", "--remove-user", "--list-users", "--update-user",
-                      "--add-token", "--remove-token", "--list-tokens"}
+                      "--add-token", "--bind-token", "--remove-token", "--list-tokens"}
 BASE_DIR           = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE        = os.path.join(BASE_DIR, "config.json")
 IMAGES_DIR         = os.path.join(BASE_DIR, "images")
@@ -201,7 +203,13 @@ def remove_user():
             return
     del users[username]
     save_users(users)
-    print(f"✓ User '{username}' removed.\n")
+    cfg = load_config()
+    owned = [n for n, e in cfg.get("api_tokens", {}).items() if token_user(e) == username]
+    for n in owned:
+        del cfg["api_tokens"][n]
+    if owned:
+        save_config(cfg)
+    print(f"✓ User '{username}' removed" + (f", with their API token(s): {', '.join(owned)}" if owned else "") + ".\n")
 
 
 def list_users():
@@ -249,45 +257,88 @@ def get_session_token(headers):
 
 
 # ── API tokens ────────────────────────────────────────────────────────────────
-# Stored as SHA-256 hashes in config.json under "api_tokens": {name: hash}.
-# Tokens are 32 random bytes, so an unsalted fast hash is sufficient.
+# Every token belongs to one user, like a password: config.json
+#   "api_tokens": {name: {"hash": sha256, "user": "ilia"}}
+# A token acts as its user (completed_by, counting, /api/v1/me); its name is only a label
+# recorded as completed_via. Tokens without a user are refused. Tokens are 32 random bytes,
+# so an unsalted fast hash is sufficient.
+
+Actor = collections.namedtuple("Actor", "name via")    # who is acting, and through which token
+
 
 def get_api_tokens() -> dict:
     return load_config().get("api_tokens", {})
 
 
-def add_api_token(name: str):
+def token_user(entry):
+    """The user a token entry belongs to, or None for legacy/unbound entries."""
+    return entry.get("user") if isinstance(entry, dict) else None
+
+
+def _require_user(user: str) -> str:
+    user = (user or "").strip().lower()
+    if user not in get_users():
+        raise SystemExit(f"User '{user}' not found. Users: {', '.join(sorted(get_users())) or 'none'}")
+    return user
+
+
+def add_api_token(name: str, user: str):
     name = name.strip()
     if not name:
-        print("Token name cannot be empty."); return
+        raise SystemExit("Token name cannot be empty.")
+    user = _require_user(user)
     cfg = load_config()
     tokens = cfg.setdefault("api_tokens", {})
     if name in tokens:
-        print(f"Token '{name}' already exists — remove it first to rotate."); return
+        raise SystemExit(f"Token '{name}' already exists — remove it first to rotate.")
     token = secrets.token_urlsafe(32)
-    tokens[name] = hash_password(token)
+    tokens[name] = {"hash": hash_password(token), "user": user}
     save_config(cfg)
-    print(f"✓ API token '{name}' created. Store it now — it will not be shown again:\n\n  {token}\n")
+    print(f"✓ API token '{name}' created for user '{user}'. Store it now — it will not be shown again:\n\n  {token}\n")
+
+
+def bind_api_token(name: str, user: str):
+    """Assign an existing token to a user without changing the token itself."""
+    user = _require_user(user)
+    cfg = load_config()
+    entry = cfg.get("api_tokens", {}).get(name)
+    if entry is None:
+        raise SystemExit(f"Token '{name}' not found.")
+    cfg["api_tokens"][name] = {"hash": entry["hash"] if isinstance(entry, dict) else entry, "user": user}
+    save_config(cfg)
+    print(f"✓ API token '{name}' now belongs to user '{user}'.")
 
 
 def remove_api_token(name: str):
     cfg = load_config()
     if name not in cfg.get("api_tokens", {}):
-        print(f"Token '{name}' not found."); return
+        raise SystemExit(f"Token '{name}' not found.")
     del cfg["api_tokens"][name]
     save_config(cfg)
     print(f"✓ API token '{name}' removed.")
 
 
+def list_api_tokens():
+    tokens = get_api_tokens()
+    if not tokens:
+        print("No API tokens configured.")
+    for name, entry in sorted(tokens.items()):
+        user = token_user(entry)
+        print(f"  • {name:<16} → {user}" if user else
+              f"  • {name:<16} → NOT ASSIGNED (refused) — run: --bind-token {name} --user <name>")
+
+
 def check_bearer(headers):
-    """Return the token's name if the Authorization header carries a valid token, else None."""
+    """Actor(user, token name) for a valid token whose user still exists, else None."""
     auth = headers.get("Authorization", "")
     if not auth.lower().startswith("bearer "):
         return None
     digest = hash_password(auth[7:].strip())
-    for name, stored in get_api_tokens().items():
-        if secrets.compare_digest(stored, digest):
-            return name
+    users = get_users()
+    for name, entry in get_api_tokens().items():
+        user = token_user(entry)
+        if user and user in users and secrets.compare_digest(str(entry.get("hash", "")), digest):
+            return Actor(user, name)
     return None
 
 
@@ -557,16 +608,23 @@ def change_type(d, node, new_type, cascade=True):
         desc["type"] = TYPE_ORDER[min(len(TYPE_ORDER) - 1, max(0, cur + delta))]
 
 
-def apply_status(node, status, user):
-    """Set status and keep completed_date/completed_by in sync, as the Edit dialog does."""
+def apply_status(node, status, actor):
+    """Set status and keep completed_date/completed_by in sync, as the Edit dialog does.
+    A completion through an API token counts for the token's user; completed_via names the token."""
+    name, via = (actor.name, actor.via) if actor else (None, None)
     prev = node.get("status")
     node["status"] = status
     if status in RESOLVED and prev not in RESOLVED:
         node["completed_date"] = node.get("target_date") or time.strftime("%Y-%m-%d")
-        node["completed_by"] = user or None
+        node["completed_by"] = name or None
+        if via:
+            node["completed_via"] = via
+        else:
+            node.pop("completed_via", None)
     elif status not in RESOLVED:
         node["completed_date"] = None
         node["completed_by"] = None
+        node.pop("completed_via", None)
 
 
 def _is_number(v):
@@ -1122,15 +1180,15 @@ class Handler(BaseHTTPRequestHandler):
         return is_allowed(self.client_address[0])
 
     def _identity(self):
-        """Username (session) or token name (bearer) of the caller; None if unauthenticated.
-        Returns "" when no users are configured (open access) and no credential was sent."""
-        token_name = check_bearer(self.headers)
-        if token_name:
-            return token_name
+        """Actor(user, token) for the caller; None if unauthenticated. A token acts as the user
+        it belongs to. With no users configured (open access) it is Actor("", None)."""
+        actor = check_bearer(self.headers)
+        if actor:
+            return actor
         token = get_session_token(self.headers)
         if validate_session(token):
-            return get_session_username(token)
-        return "" if not has_any_user() else None
+            return Actor(get_session_username(token), None)
+        return Actor("", None) if not has_any_user() else None
 
     def _authed(self) -> bool:
         return self._identity() is not None
@@ -1301,7 +1359,8 @@ class Handler(BaseHTTPRequestHandler):
             if route == "instance":
                 return 200, {"instance_name": INSTANCE_NAME}
             if route == "me":
-                return 200, {"username": self._identity() or ""}
+                me = self._identity()
+                return 200, {"username": me.name if me else "", "token": me.via if me else None}
             if route == "geolocate":
                 geo = geolocate_by_ip()
                 return (200, {"ok": True, **geo}) if geo else (500, {"ok": False, "error": "Geolocation failed"})
@@ -1324,7 +1383,7 @@ class Handler(BaseHTTPRequestHandler):
                 if_revision = int(if_revision)
             except (TypeError, ValueError):
                 raise ApiError(400, "if_revision must be an integer")
-        user = self._identity() or None
+        user = self._identity()
 
         def int_param(name, default):
             try:
@@ -1450,18 +1509,32 @@ if __name__ == "__main__":
         list_users()
         sys.exit(0)
 
-    for flag, fn in (("--add-token", add_api_token), ("--remove-token", remove_api_token)):
+    def _arg_after(flag):
+        i = args.index(flag)
+        return args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith("--") else ""
+
+    for flag, fn in (("--add-token", add_api_token), ("--bind-token", bind_api_token)):
         if flag in args:
-            i = args.index(flag)
-            if i + 1 >= len(args):
-                print(f"Usage: python server.py {flag} NAME"); sys.exit(1)
-            fn(args[i + 1])
+            name, user = _arg_after(flag), (_arg_after("--user") if "--user" in args else "")
+            if not name or not user:
+                print(f"Usage: python server.py {flag} NAME --user USER"); sys.exit(1)
+            fn(name, user)
             sys.exit(0)
 
-    if "--list-tokens" in args:
-        names = sorted(get_api_tokens())
-        print("\n".join(f"  • {n}" for n in names) if names else "No API tokens configured.")
+    if "--remove-token" in args:
+        if not _arg_after("--remove-token"):
+            print("Usage: python server.py --remove-token NAME"); sys.exit(1)
+        remove_api_token(_arg_after("--remove-token"))
         sys.exit(0)
+
+    if "--list-tokens" in args:
+        list_api_tokens()
+        sys.exit(0)
+
+    unassigned = sorted(n for n, e in get_api_tokens().items() if not token_user(e))
+    if unassigned:
+        print(f"⚠  API token(s) not assigned to a user, refused until bound: {', '.join(unassigned)}")
+        print("   Run `python server.py --bind-token NAME --user USER`.")
 
     if not has_any_user():
         print("⚠  No users configured.")
