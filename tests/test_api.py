@@ -36,7 +36,8 @@ class ApiTest(unittest.TestCase):
         server._change_log.clear()
         with open(server.CONFIG_FILE, "w") as f:
             json.dump({"users": {"alice": server.hash_password("pw")},
-                       "api_tokens": {"bot": server.hash_password(TOKEN)}}, f)
+                       "api_tokens": {"bot": {"hash": server.hash_password(TOKEN), "user": "alice"},
+                                      "legacy": server.hash_password("legacy-unbound-token")}}, f)
         self.httpd = server.ThreadedHTTPServer(("127.0.0.1", 0), server.Handler)
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -102,7 +103,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(draft["relates_to"], [res["id"]])
         review = d["nodes"][review_id]
         self.assertEqual(review["completed_date"], "2026-11-01")
-        self.assertEqual(review["completed_by"], "bot")
+        self.assertEqual(review["completed_by"], "alice")      # counts for the token's user
+        self.assertEqual(review["completed_via"], "bot")       # the token is only a label
         self.assertEqual(d["revision"], res["revision"])
 
     def test_create_top_level_is_space(self):
@@ -338,6 +340,50 @@ class ApiTest(unittest.TestCase):
                 urllib.request.urlopen(req)
             self.assertEqual(cm.exception.code, 404, path)
             self.assertIn("/api/v1", json.loads(cm.exception.read())["error"])
+
+
+    # ── tokens belong to users ───────────────────────────────────────────────
+    def test_token_acts_as_its_user(self):
+        status, me = self.call("GET", "/api/me")
+        self.assertEqual((status, me["username"], me["token"]), (200, "alice", "bot"))
+        self.call("PATCH", "/api/nodes/task_1", {"status": "done"})
+        node = self.stored()["nodes"]["task_1"]
+        self.assertEqual((node["completed_by"], node["completed_via"]), ("alice", "bot"))
+        self.call("PATCH", "/api/nodes/task_1", {"status": "open"})        # reopening clears both
+        node = self.stored()["nodes"]["task_1"]
+        self.assertIsNone(node["completed_by"])
+        self.assertNotIn("completed_via", node)
+
+    def test_browser_completion_has_no_via(self):
+        req = urllib.request.Request(self.base + "/do-login", method="POST",
+                                     data=json.dumps({"username": "alice", "password": "pw"}).encode())
+        with urllib.request.urlopen(req) as r:
+            cookie = r.headers["Set-Cookie"].split(";")[0]
+        req = urllib.request.Request(self.url("/api/batch"), method="POST", headers={"Cookie": cookie, "Content-Type": "application/json"},
+                                     data=json.dumps({"ops": [{"op": "update", "id": "task_1", "set": {"status": "done"}}]}).encode())
+        urllib.request.urlopen(req).read()
+        node = self.stored()["nodes"]["task_1"]
+        self.assertEqual(node["completed_by"], "alice")
+        self.assertNotIn("completed_via", node)
+
+    def test_unassigned_token_refused(self):
+        self.assertEqual(self.call("GET", "/api/nodes", token="legacy-unbound-token")[0], 401)
+
+    def test_token_dies_with_its_user(self):
+        cfg = json.load(open(server.CONFIG_FILE))
+        cfg["users"] = {"bob": server.hash_password("x")}                 # alice removed
+        json.dump(cfg, open(server.CONFIG_FILE, "w"))
+        self.assertEqual(self.call("GET", "/api/nodes")[0], 401)
+
+    def test_cli_add_and_bind(self):
+        with self.assertRaises(SystemExit):
+            server.add_api_token("x", "nobody")                            # user must exist
+        server.add_api_token("phone", "alice")
+        self.assertEqual(server.get_api_tokens()["phone"]["user"], "alice")
+        old_hash = server.get_api_tokens()["legacy"]
+        server.bind_api_token("legacy", "alice")                           # same token, now owned
+        self.assertEqual(server.get_api_tokens()["legacy"], {"hash": old_hash, "user": "alice"})
+        self.assertEqual(self.call("GET", "/api/me", token="legacy-unbound-token")[1]["username"], "alice")
 
 
 if __name__ == "__main__":

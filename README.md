@@ -221,17 +221,23 @@ Everything goes through a JSON API under `/api/v1/`: the web UI itself, scripts 
 
 API clients use bearer tokens. Browser sessions also work.
 
+**Every token belongs to a user, like a password.** A token acts as its user. Tasks it completes get `completed_by: "<user>"` and count for that user, exactly as if they'd clicked Complete in the browser. The token's name is just a label, recorded as `completed_via` so you can still tell a task was closed through the API.
+
 ```bash
-python server.py --add-token my-script     # prints the token once
-python server.py --list-tokens
+python server.py --add-token my-script --user ilia    # prints the token once
+python server.py --bind-token my-script --user ilia   # give an existing token an owner (same token)
+python server.py --list-tokens                        # tokens and their users
 python server.py --remove-token my-script
 ```
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/nodes
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/me     # → {"username": "ilia", "token": "my-script"}
 ```
 
-Tokens are stored as SHA-256 hashes in `config.json` under `api_tokens`. The IP allowlist still applies. When a token resolves a task, its name is recorded as `completed_by`.
+Tokens are stored as SHA-256 hashes in `config.json`, under `api_tokens` as `{name: {"hash", "user"}}`. The IP allowlist still applies.
+- **No owner, no access:** a token without a user, such as one created by an older version, is refused until you run `--bind-token`. The server warns about such tokens at startup.
+- **Removing a user also removes their tokens.**
 
 ### Endpoints
 
