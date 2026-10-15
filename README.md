@@ -32,7 +32,11 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 
 ### 🎨 Visual design
 - Priority-coloured card borders: 1-10 scale (1 = Low, 4 = Medium, 7 = High, 10 = Very High), color gradient from grey through green and orange to red
-- Status pills: open, in_progress, blocked, done
+- Status pills: Open, In progress, Blocked, Done, Won't do
+- **Light / dark theme** — 🌓 button in the header cycles *follow system → light → dark* (remembered per browser)
+- Progress bars on Spaces and Projects (share of tasks done)
+- Header summary: today's date plus overdue / today / tomorrow counts — click one to jump there
+- Cards only show the fields that are filled in
 - Image thumbnails with hover popup zoom
 - Done tasks shown greyed-out with strikethrough and a × watermark
 
@@ -41,6 +45,7 @@ A self-hosted, local-first task management tool — **one HTML file + one Python
 - Burger menu (☰) on every card: Edit, Complete, Add child, Delete
 - Peek popup on click for compact cards — full card info without expanding
 - Bidirectional relations between tasks
+- **Search** in the Filter panel matches task names and descriptions — press **/** to jump to it
 - **Reorganize from the Edit dialog**: move an item under any other parent (or to the top level), change its type (Space/Project/Task/Subtask — optionally cascading to nested items), and reorder it up/down among same-type siblings
 - Searchable "Move to" and "Relates to" pickers — type to filter; in "Move to", use ↑ / ↓ / Enter to navigate and pick a match without the mouse
 
@@ -360,7 +365,9 @@ sudo systemctl enable --now task-planner
 | Key | Action |
 |-----|--------|
 | `N` | Add child to hovered card |
-| `Esc` | Close peek popup |
+| `/` | Focus the Filter search box |
+| `Esc` | Close the edit dialog / peek popup / calendar popup |
+| `Ctrl` + `Enter` (`⌘` + `Enter`) | Save the edit dialog |
 
 ---
 

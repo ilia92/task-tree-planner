@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Task Tree Planner</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='13' y='22' width='6' height='9' rx='1' fill='%237c3f00'/%3E%3Cpolygon points='16,1 4,13 28,13' fill='%2322c55e'/%3E%3Cpolygon points='16,8 3,19 29,19' fill='%2316a34a'/%3E%3Cpolygon points='16,14 2,25 30,25' fill='%2315803d'/%3E%3C/svg%3E" />
+  <script>
+    (function () {
+      let pref = 'auto';
+      try { pref = localStorage.getItem('ttp-theme') || 'auto'; } catch {}
+      const dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
   <style>
     :root {
       --bg: #f3f4f6;
@@ -73,7 +81,7 @@
 
     .btn {
       border: 1px solid var(--line);
-      background: white;
+      background: var(--panel);
       color: var(--text);
       border-radius: 14px;
       padding: 10px 14px;
@@ -117,7 +125,7 @@
       line-height: 1;
       transition: background 0.15s;
     }
-    .panel-header .collapse-btn:hover { background: #f3f4f6; }
+    .panel-header .collapse-btn:hover { background: var(--hover); }
 
     .panel.done-collapsed .done-grid { display: none; }
     .panel.done-collapsed .panel-header { margin-bottom: 0; }
@@ -128,7 +136,7 @@
       padding: 4px 10px;
       color: var(--muted);
       font-size: 13px;
-      background: #fafafa;
+      background: var(--surface-2);
     }
 
     .mini-cards {
@@ -155,7 +163,7 @@
     .node-card {
       border: 2px solid var(--line);
       border-radius: var(--radius);
-      background: white;
+      background: var(--panel);
       padding: 16px;
       position: relative;
       min-height: 132px;
@@ -243,7 +251,7 @@
       padding: 3px 8px;
       font-size: 12px;
       color: var(--muted);
-      background: #fafafa;
+      background: var(--surface-2);
       text-transform: capitalize;
     }
 
@@ -272,7 +280,7 @@
     }
 
     .status-wont_do {
-      background: #f8fafc;
+      background: var(--surface-2);
       border-color: #cbd5e1;
       color: #64748b;
     }
@@ -285,7 +293,7 @@
     }
 
     .label { font-weight: 700; margin-bottom: 4px; }
-    .value { color: #374151; white-space: pre-wrap; }
+    .value { color: var(--text-2); white-space: pre-wrap; }
 
     /* ── Compact / nested rectangle view ─────────────────────────── */
     .node-card.is-compact {
@@ -303,7 +311,7 @@
     .compact-child-card {
       border: 2px solid var(--line);
       border-radius: 12px;
-      background: #f8fafc;
+      background: var(--surface-2);
       padding: 8px 10px;
       font-size: 13px;
     }
@@ -342,7 +350,7 @@
     .compact-grandchild-card {
       border: 1.5px solid var(--line);
       border-radius: 9px;
-      background: white;
+      background: var(--panel);
       padding: 6px 8px;
       font-size: 12px;
       font-weight: 600;
@@ -365,7 +373,7 @@
       height: 38px;
       border-radius: 12px;
       border: 1px solid var(--line);
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 16px;
       line-height: 1;
@@ -374,7 +382,7 @@
       justify-content: center;
       flex: 0 0 auto;
     }
-    .expand-btn:hover { background: #f3f4f6; }
+    .expand-btn:hover { background: var(--hover); }
 
     /* ── Overdue panel ────────────────────────────────────────────── */
     .overdue-panel {
@@ -395,7 +403,7 @@
       height: 38px;
       border-radius: 12px;
       border: 1px solid var(--line);
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 18px;
       line-height: 1;
@@ -406,7 +414,7 @@
       right: 0;
       top: 44px;
       min-width: 190px;
-      background: white;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
       box-shadow: var(--shadow);
@@ -420,13 +428,13 @@
     .menu button {
       width: 100%;
       border: 0;
-      background: white;
+      background: var(--panel);
       text-align: left;
       padding: 12px 14px;
       cursor: pointer;
     }
 
-    .menu button:hover { background: #f9fafb; }
+    .menu button:hover { background: var(--hover); }
     .menu-icon { margin-right: 7px; }
 
     .done-grid {
@@ -450,7 +458,7 @@
 
     .modal {
       width: min(820px, 100%);
-      background: white;
+      background: var(--panel);
       border-radius: 24px;
       border: 1px solid var(--line);
       box-shadow: var(--shadow);
@@ -498,7 +506,7 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 11px 12px;
-      background: white;
+      background: var(--panel);
     }
 
     .form-field textarea {
@@ -520,7 +528,7 @@
       object-fit: cover;
       border-radius: 12px;
       border: 1px solid var(--line);
-      background: #fff;
+      background: var(--panel);
       display: block;
       cursor: zoom-in;
     }
@@ -537,7 +545,7 @@
       border-radius: 16px;
       border: 2px solid var(--line);
       box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-      background: white;
+      background: var(--panel);
       pointer-events: none;
     }
 
@@ -616,7 +624,7 @@
       padding: 6px 10px;
       font: inherit;
       font-size: 13px;
-      background: white;
+      background: var(--panel);
       color: var(--text);
       cursor: pointer;
     }
@@ -628,7 +636,7 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      background: white;
+      background: var(--panel);
     }
 
     .relates-search-input {
@@ -639,7 +647,7 @@
       border-bottom: 1px solid var(--line);
       padding: 10px 12px;
       outline: none;
-      background: white;
+      background: var(--panel);
       font: inherit;
       flex: 0 0 auto;
     }
@@ -684,7 +692,7 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 11px 12px;
-      background: white;
+      background: var(--panel);
       font: inherit;
       text-align: left;
       cursor: pointer;
@@ -701,7 +709,7 @@
       left: 0;
       right: 0;
       z-index: 50;
-      background: white;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
       box-shadow: var(--shadow);
@@ -717,7 +725,7 @@
       border-radius: 10px;
       padding: 9px 10px;
       outline: none;
-      background: white;
+      background: var(--panel);
       font: inherit;
     }
 
@@ -737,7 +745,7 @@
       font-size: 14px;
     }
 
-    .combo-option:hover { background: #f3f4f6; }
+    .combo-option:hover { background: var(--hover); }
     .combo-option.selected { background: #eef2ff; font-weight: 600; }
     .combo-option.active { box-shadow: inset 0 0 0 2px #3b82f6; }
     .combo-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
@@ -748,7 +756,7 @@
       height: 38px;
       border-radius: 12px;
       border: 1px solid var(--line);
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 14px;
       line-height: 1;
@@ -757,7 +765,7 @@
       justify-content: center;
       flex: 0 0 auto;
     }
-    .compact-btn:hover { background: #f3f4f6; }
+    .compact-btn:hover { background: var(--hover); }
 
     /* Right-side button group in node-head */
     .node-controls {
@@ -796,7 +804,7 @@
     }
 
     .pill-count-todo {
-      background: #f1f5f9;
+      background: var(--hover);
       border-color: #cbd5e1;
       color: #475569;
       font-variant-numeric: tabular-nums;
@@ -851,7 +859,7 @@
       transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
     .new-child-btn:hover {
-      background: #f8fafc;
+      background: var(--surface-2);
       border-color: #94a3b8;
       color: var(--text);
     }
@@ -879,7 +887,7 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 11px 12px;
-      background: white;
+      background: var(--panel);
       font: inherit;
     }
 
@@ -897,7 +905,7 @@
       height: 42px;
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 18px;
       display: flex;
@@ -905,7 +913,7 @@
       justify-content: center;
     }
 
-    .date-cal-btn:hover { background: #f3f4f6; }
+    .date-cal-btn:hover { background: var(--hover); }
 
     /* ── Monthly calendar heatmap ──────────────────────────────── */
     .cal-nav {
@@ -919,14 +927,14 @@
       height: 32px;
       border: 1px solid var(--line);
       border-radius: 9px;
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    .cal-nav-btn:hover { background: #f3f4f6; }
+    .cal-nav-btn:hover { background: var(--hover); }
 
     .cal-month-label {
       font-weight: 700;
@@ -1068,7 +1076,7 @@
     .cal-tooltip {
       position: fixed;
       z-index: 999;
-      background: white;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.13);
@@ -1095,7 +1103,7 @@
       border-radius: 6px;
     }
 
-    .cal-tooltip-task:hover { background: #f3f4f6; }
+    .cal-tooltip-task:hover { background: var(--hover); }
     .cal-tooltip-task:last-child { border-bottom: none; }
     .cal-tooltip-task-name { flex: 1 1 auto; min-width: 0; }
 
@@ -1130,7 +1138,7 @@
       z-index: 9999;
       pointer-events: none;
       width: min(480px, 90vw);
-      background: white;
+      background: var(--panel);
       border-radius: var(--radius);
       border: 2px solid var(--p4);
       box-shadow: 0 16px 48px rgba(0,0,0,0.22);
@@ -1179,7 +1187,7 @@
     .custom-date-picker {
       position: fixed;
       z-index: 600;
-      background: white;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.16);
@@ -1199,12 +1207,12 @@
       width: 28px; height: 28px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: white;
+      background: var(--panel);
       cursor: pointer;
       font-size: 14px;
       display: flex; align-items: center; justify-content: center;
     }
-    .cdp-nav-btn:hover { background: #f3f4f6; }
+    .cdp-nav-btn:hover { background: var(--hover); }
     .cdp-month-label { font-weight: 700; font-size: 13px; }
     .cdp-grid {
       display: grid;
@@ -1228,10 +1236,583 @@
       cursor: pointer;
       font-weight: 600;
     }
-    .cdp-cell:hover:not(.cdp-empty) { background: #f1f5f9; }
+    .cdp-cell:hover:not(.cdp-empty) { background: var(--hover); }
     .cdp-cell.cdp-today { border: 1.5px solid var(--text); }
     .cdp-cell.cdp-selected { background: var(--text); color: white !important; border-color: transparent; }
     .cdp-cell.cdp-empty { cursor: default; }
+
+    /* ── Visual refresh: design tokens, light + dark theme ───────────
+       Layered over the rules above. Colours come from the tokens below;
+       [data-theme="dark"] on <html> swaps them (set by the theme toggle). */
+    :root {
+      color-scheme: light;
+      --bg: #f4f5fa;
+      --panel: #ffffff;
+      --surface-2: #f8fafc;
+      --hover: #f1f5f9;
+      --field: #fbfcfe;
+      --line: #e3e6ee;
+      --line-strong: #cfd5e1;
+      --text: #0f172a;
+      --text-2: #334155;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --accent-2: #8b5cf6;
+      --accent-soft: #eef2ff;
+      --accent-line: #c7d2fe;
+      --accent-ink: #4338ca;
+      --accent-ring: rgba(99, 102, 241, 0.28);
+      --danger: #ef4444;
+      --danger-soft: #fff5f5;
+      --danger-line: #fecaca;
+      --ok-ink: #15803d;
+      --weekend: #e11d48;
+      --done-bg: #eef0f4;
+      --done-text: #64748b;
+      --glass: rgba(255, 255, 255, 0.78);
+      --glass-line: rgba(255, 255, 255, 0.9);
+      --glow-1: rgba(99, 102, 241, 0.11);
+      --glow-2: rgba(16, 185, 129, 0.09);
+      --cal-empty: #f8fafc;
+      --cal-reserved: #cbd5e1;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -8px rgba(15, 23, 42, 0.10);
+      --shadow-lg: 0 2px 6px rgba(15, 23, 42, 0.06), 0 24px 48px -12px rgba(15, 23, 42, 0.22);
+      --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0b0f19;
+      --panel: #121929;
+      --surface-2: #172033;
+      --hover: #1d2740;
+      --field: #0e1422;
+      --line: #232e45;
+      --line-strong: #34425f;
+      --text: #e6eaf3;
+      --text-2: #c3cad8;
+      --muted: #8a96ad;
+      --accent: #818cf8;
+      --accent-2: #a78bfa;
+      --accent-soft: rgba(129, 140, 248, 0.14);
+      --accent-line: rgba(129, 140, 248, 0.42);
+      --accent-ink: #c7d2fe;
+      --accent-ring: rgba(129, 140, 248, 0.32);
+      --danger: #f87171;
+      --danger-soft: rgba(239, 68, 68, 0.07);
+      --danger-line: rgba(239, 68, 68, 0.35);
+      --ok-ink: #4ade80;
+      --weekend: #fb7185;
+      --done-bg: #151c2b;
+      --done-text: #8a96ad;
+      --glass: rgba(18, 25, 41, 0.72);
+      --glass-line: rgba(255, 255, 255, 0.06);
+      --glow-1: rgba(99, 102, 241, 0.16);
+      --glow-2: rgba(16, 185, 129, 0.08);
+      --cal-empty: #1a2236;
+      --cal-reserved: #3a4560;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+    }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background:
+        radial-gradient(1100px 520px at -5% -10%, var(--glow-1), transparent 60%),
+        radial-gradient(900px 480px at 105% -5%, var(--glow-2), transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+      transition: background-color 0.25s;
+    }
+
+    ::selection { background: var(--accent-ring); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+    code { background: var(--hover); padding: 1px 6px; border-radius: 6px; font-size: 0.92em; }
+
+    h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
+
+    section[id], .panel { scroll-margin-top: 110px; }
+
+    /* Top bar — frosted glass, sticky on wide screens */
+    .topbar {
+      background: var(--glass);
+      backdrop-filter: saturate(1.6) blur(14px);
+      -webkit-backdrop-filter: saturate(1.6) blur(14px);
+      border: 1px solid var(--glass-line);
+      border-radius: 22px;
+      padding: 14px 20px;
+      box-shadow: var(--shadow);
+    }
+    @media (min-width: 981px) {
+      .topbar { position: sticky; top: 12px; z-index: 40; }
+    }
+
+    .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .brand-logo {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #ecfdf5, #a7f3d0);
+      box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.25), 0 4px 12px -4px rgba(16, 185, 129, 0.45);
+    }
+    [data-theme="dark"] .brand-logo { background: linear-gradient(135deg, #064e3b, #065f46); }
+
+    .topbar h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+      background: linear-gradient(90deg, var(--text) 30%, var(--accent-ink));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .header-summary {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 5px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .header-date { font-weight: 600; color: var(--text-2); margin-right: 4px; }
+    .stat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: var(--hover);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    a.stat-chip:hover { background: var(--accent-soft); color: var(--accent-ink); }
+    .stat-chip b { font-variant-numeric: tabular-nums; }
+    .stat-chip.danger { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+    .stat-chip.ok { background: color-mix(in srgb, var(--ok-ink) 13%, transparent); color: var(--ok-ink); }
+
+    .actions { align-items: center; }
+
+    /* Buttons */
+    .btn {
+      background: var(--panel);
+      border-color: var(--line);
+      border-radius: 12px;
+      padding: 9px 15px;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.2s var(--ease), transform 0.15s var(--ease);
+    }
+    .btn:hover { opacity: 1; background: var(--hover); border-color: var(--line-strong); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary {
+      color: white;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);  /* fixed: white text needs the deeper hues in both themes */
+      border-color: transparent;
+      box-shadow: 0 6px 16px -4px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    .btn.primary:hover {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      filter: brightness(1.08);
+      box-shadow: 0 10px 22px -6px rgba(99, 102, 241, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    .btn.icon { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; font-size: 17px; }
+
+    .menu-btn, .expand-btn, .compact-btn, .cal-nav-btn, .date-cal-btn, .cdp-nav-btn {
+      border-color: var(--line);
+      border-radius: 10px;
+      color: var(--text-2);
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .menu-btn, .expand-btn, .compact-btn { width: 34px; height: 34px; }
+    .menu-btn:hover, .expand-btn:hover, .compact-btn:hover,
+    .cal-nav-btn:hover, .date-cal-btn:hover, .cdp-nav-btn:hover,
+    .panel-header .collapse-btn:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--accent);
+    }
+
+    /* Panels */
+    .panel, .overdue-panel {
+      border: 1px solid var(--glass-line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .panel { border-color: color-mix(in srgb, var(--line) 60%, transparent); }
+    .panel-header { margin-bottom: 16px; }
+    .panel .panel-header h2 { display: inline-flex; align-items: center; gap: 10px; }
+    .panel .panel-header h2::before {
+      content: "";
+      width: 4px;
+      height: 18px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    }
+
+    .overdue-panel {
+      border-color: var(--danger-line);
+      background: linear-gradient(180deg, var(--danger-soft), var(--panel) 140px);
+      box-shadow: 0 1px 2px rgba(239, 68, 68, 0.06), 0 12px 30px -12px rgba(239, 68, 68, 0.28);
+    }
+    .overdue-panel .panel-header h2 { color: var(--danger); }
+    .overdue-panel .count {
+      background: color-mix(in srgb, var(--danger) 14%, transparent);
+      border-color: var(--danger-line);
+      color: var(--danger);
+    }
+
+    .count {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-weight: 700;
+      font-size: 12px;
+      min-width: 26px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .legend { font-size: 13px; }
+
+    .filter-select, .filter-search {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 10px;
+      background: var(--field);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .filter-select:hover, .filter-search:hover { border-color: var(--line-strong); }
+    .filter-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .filter-search-wrap { position: relative; }
+    .filter-search { width: 220px; padding-left: 30px; padding-right: 30px; }
+    .filter-search-wrap::before {
+      content: "⌕";
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-52%);
+      color: var(--muted);
+      font-size: 16px;
+      pointer-events: none;
+    }
+    .filter-search-wrap kbd {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .filter-search:focus + kbd, .filter-search:not(:placeholder-shown) + kbd { display: none; }
+    kbd {
+      display: inline-block;
+      min-width: 18px;
+      padding: 0 5px;
+      border: 1px solid var(--line-strong);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font: 600 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: center;
+    }
+
+    /* Node cards — priority colour drives border, tint and glow */
+    .node-card, .compact-child-card, .compact-grandchild-card { --pc: var(--line-strong); }
+    .priority-p1  { --pc: var(--p1); }
+    .priority-p2  { --pc: var(--p2); }
+    .priority-p3  { --pc: var(--p3); }
+    .priority-p4  { --pc: var(--p4); }
+    .priority-p5  { --pc: var(--p5); }
+    .priority-p6  { --pc: var(--p6); }
+    .priority-p7  { --pc: var(--p7); }
+    .priority-p8  { --pc: var(--p8); }
+    .priority-p9  { --pc: var(--p9); }
+    .priority-p10 { --pc: var(--p10); }
+    [data-theme="dark"] .priority-p1 { --pc: #64748b; }
+
+    .node-card {
+      min-height: 0;
+      border-width: 1.5px;
+      border-color: color-mix(in srgb, var(--pc) 75%, var(--panel));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--pc) 8%, var(--panel)), var(--panel) 72px);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px -10px color-mix(in srgb, var(--pc) 70%, transparent);
+      transition: box-shadow 0.2s var(--ease), border-color 0.2s;
+    }
+    .node-card:hover {
+      border-color: var(--pc);
+      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 14px 30px -12px color-mix(in srgb, var(--pc) 85%, transparent);
+    }
+    .node-head { margin-bottom: 0; }
+    .node-title { font-size: 15px; letter-spacing: -0.01em; }
+    .priority-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 7%, transparent); }
+
+    .children { border-left-color: var(--line); }
+    .node-card::before { background: var(--line); }
+
+    /* Card body: only the fields that have content */
+    .node-details { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+    .node-desc { color: var(--text-2); white-space: pre-wrap; line-height: 1.45; }
+    .node-relations { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); }
+    .node-relations .rel-label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+    .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .value { color: var(--text-2); }
+
+    /* Progress bar (Spaces / Projects) */
+    .progress { display: flex; align-items: center; gap: 10px; margin-top: 10px; max-width: 420px; }
+    .progress-track {
+      flex: 1;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--hover);
+      overflow: hidden;
+    }
+    .progress-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #34d399, #10b981);
+      transition: width 0.5s var(--ease);
+    }
+    .progress-label { font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
+
+    .compact-child-card {
+      border-width: 1.5px;
+      border-color: color-mix(in srgb, var(--pc) 70%, var(--panel));
+      background: color-mix(in srgb, var(--pc) 6%, var(--surface-2));
+      transition: box-shadow 0.2s var(--ease), border-color 0.2s;
+      cursor: pointer !important;
+    }
+    .compact-child-card:hover {
+      border-color: var(--pc);
+      box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--pc) 80%, transparent);
+    }
+    .compact-grandchild-card {
+      background: var(--panel);
+      border-color: color-mix(in srgb, var(--pc) 70%, var(--panel));
+      transition: border-color 0.2s;
+      cursor: pointer !important;
+    }
+    .compact-grandchild-card:hover { border-color: var(--pc); }
+
+    /* Pills — each tinted pill names a tone; tint, border and ink derive from it */
+    .pill {
+      border-color: var(--line);
+      background: var(--surface-2);
+      color: var(--muted);
+      padding: 2px 9px;
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.5;
+      text-transform: none;
+      white-space: nowrap;
+    }
+    .status-open, .pill-date                                { --tone: #2563eb; }
+    .status-in_progress                                     { --tone: #0d9488; }
+    .status-blocked                                         { --tone: #ea580c; }
+    .status-done, .pill-time-done, .pill-count-done,
+    .pill-time-scheduled, .pill-completed-date              { --tone: #16a34a; }
+    .status-wont_do, .pill-count-todo                       { --tone: #64748b; }
+    .pill-time, .pill-user                                  { --tone: #0284c7; }
+    .pill-time-sum, .pill-date-today                        { --tone: #b45309; }
+    .pill-time-unscheduled, .pill-date-overdue              { --tone: #dc2626; }
+    .status-open, .status-in_progress, .status-blocked, .status-done, .status-wont_do,
+    .pill-date, .pill-date-today, .pill-date-overdue, .pill-time, .pill-time-sum,
+    .pill-time-done, .pill-time-scheduled, .pill-time-unscheduled, .pill-count-done,
+    .pill-count-todo, .pill-completed-date, .pill-user {
+      background: color-mix(in srgb, var(--tone) 10%, var(--panel));
+      border-color: color-mix(in srgb, var(--tone) 32%, var(--panel));
+      color: color-mix(in srgb, var(--tone) 82%, var(--text));
+    }
+    .status-in_progress::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 5px;
+      vertical-align: 1px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: ttp-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes ttp-pulse { 50% { opacity: 0.35; } }
+
+    .lane-done-divider { color: var(--ok-ink); border-top-color: var(--line); font-size: 15px; }
+
+    .new-child-btn { border-radius: 999px; padding: 5px 13px; border-color: var(--line-strong); }
+    .new-child-btn:hover { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+
+    /* Done cards */
+    .done-card { border-color: var(--line-strong); opacity: 0.8; }
+    .done-x { color: color-mix(in srgb, var(--muted) 18%, transparent); }
+
+    /* Empty states */
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 26px 12px;
+      border: 1.5px dashed var(--line);
+      border-radius: 16px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .empty-icon { font-size: 26px; line-height: 1; }
+
+    /* Menus, popups, tooltips */
+    @keyframes ttp-pop {
+      from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
+    }
+    .menu {
+      top: 40px;
+      background: var(--panel);
+      border-color: var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow-lg);
+      padding: 6px;
+    }
+    .menu-wrap:has(.menu.open) { z-index: 60; }  /* keep an open menu above sibling cards' buttons */
+    .menu.open { animation: ttp-pop 0.16s var(--ease); transform-origin: top right; }
+    .menu button { border-radius: 8px; padding: 9px 12px; font-size: 14px; background: transparent; color: var(--text); }
+    .menu button:hover { background: var(--accent-soft); }
+
+    .cal-tooltip, .custom-date-picker, .combo-popup, .peek-popup {
+      background: var(--panel);
+      color: var(--text);
+      border-color: var(--line);
+      box-shadow: var(--shadow-lg);
+    }
+    .peek-popup { border-color: var(--pc, var(--p4)); }
+    .cal-tooltip-task:hover, .combo-option:hover { background: var(--accent-soft); }
+    .combo-option.selected { background: var(--accent-soft); color: var(--accent-ink); }
+    .combo-option.active { box-shadow: inset 0 0 0 2px var(--accent); }
+
+    /* Modal */
+    @keyframes ttp-modal-in {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
+    }
+    .modal-backdrop {
+      background: rgba(15, 23, 42, 0.42);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+    }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-lg);
+      padding: 24px;
+    }
+    .modal-backdrop.open .modal { animation: ttp-modal-in 0.22s var(--ease); }
+    .modal > h2 { font-size: 22px; }
+    .modal-actions { align-items: center; }
+    .modal-hint { margin-right: auto; font-size: 12px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .form-field > label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .form-field input,
+    .form-field textarea,
+    .form-field select,
+    .date-text-input,
+    .combo-trigger,
+    .combo-filter-input,
+    .relates-checkbox-list,
+    .relates-search-input {
+      color: var(--text);
+      border-color: var(--line);
+      background: var(--field);
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+    .relates-search-input { background: transparent; }
+    .form-field input:focus,
+    .form-field textarea:focus,
+    .form-field select:focus,
+    .date-text-input:focus,
+    .combo-filter-input:focus,
+    .filter-select:focus,
+    .filter-search:focus,
+    .relates-checkbox-list:focus-within {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--panel);
+      box-shadow: 0 0 0 4px var(--accent-ring);
+    }
+    .combo-trigger:hover { border-color: var(--line-strong); }
+    input[type=checkbox] { accent-color: var(--accent); }
+    .ancestor-item { background: var(--surface-2); }
+
+    /* Calendar */
+    .cal-day {
+      border-radius: 10px;
+      transition: transform 0.15s var(--ease), box-shadow 0.15s;
+    }
+    .cal-day:hover { transform: scale(1.12); box-shadow: 0 8px 18px -6px rgba(15, 23, 42, 0.35); }
+    .cal-day.empty-slot:hover { box-shadow: none; }
+    .cal-day.today { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+    .cal-month-label { letter-spacing: -0.01em; }
+    .cdp-cell { transition: background 0.12s; }
+    .cdp-cell.cdp-today { border-color: var(--accent); }
+    .cdp-cell.cdp-selected { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+
+    .save-indicator {
+      border-radius: 999px;
+      font-weight: 600;
+      --tone: #16a34a;
+      background: color-mix(in srgb, var(--tone) 10%, var(--panel));
+      border-color: color-mix(in srgb, var(--tone) 32%, var(--panel));
+      color: color-mix(in srgb, var(--tone) 82%, var(--text));
+    }
+    .save-indicator.error { --tone: #ea580c; }
+    .kbd-hint { border-radius: 999px; backdrop-filter: blur(6px); }
+
+    /* Completion confetti */
+    .confetti {
+      position: fixed;
+      z-index: 10000;
+      width: 8px;
+      height: 12px;
+      border-radius: 2px;
+      pointer-events: none;
+      animation: ttp-confetti 1s cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+    }
+    @keyframes ttp-confetti {
+      0%   { transform: translate(-50%, -50%) rotate(0); opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* Let form columns shrink below their content's intrinsic width on narrow screens */
+    .form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .form-grid > .form-field, .date-text-input { min-width: 0; }
+
+    @media (max-width: 980px) {
+      .form-grid { grid-template-columns: minmax(0, 1fr); }
+      .move-type-row { flex-wrap: wrap; }
+      .move-type-row #form-parent-field { flex-basis: 100%; }
+      .modal { padding: 18px; }
+      .filter-search { width: 100%; }
+      .filter-search-wrap { flex: 1 1 100%; }
+      .modal-hint { display: none; }
+    }
 
     @media (max-width: 980px) {
       .lane-grid,
@@ -1250,15 +1831,19 @@
 <body>
   <div class="container">
     <div class="topbar">
-      <div>
-        <h1><svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><rect x="13" y="22" width="6" height="9" rx="1" fill="#7c3f00"/><polygon points="16,1 4,13 28,13" fill="#22c55e"/><polygon points="16,8 3,19 29,19" fill="#16a34a"/><polygon points="16,14 2,25 30,25" fill="#15803d"/></svg><span id="instance-prefix" style="display:none"></span>Task Tree Planner</h1>
-        <p class="subtle">Plain HTML + JS. JSON-backed. Compact/expanded hierarchy, done lane, and add-from-box workflow.</p>
+      <div class="brand">
+        <div class="brand-logo"><svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect x="13" y="22" width="6" height="9" rx="1" fill="#7c3f00"/><polygon points="16,1 4,13 28,13" fill="#22c55e"/><polygon points="16,8 3,19 29,19" fill="#16a34a"/><polygon points="16,14 2,25 30,25" fill="#15803d"/></svg></div>
+        <div>
+          <h1><span id="instance-prefix" style="display:none"></span>Task Tree Planner</h1>
+          <div class="header-summary" id="header-summary"></div>
+        </div>
       </div>
       <div class="actions">
         <button class="btn primary" id="add-root-btn">Create new Space</button>
         <span class="save-indicator" id="save-indicator">✓ Saved</span>
         <button class="btn" id="import-btn">Import JSON</button>
         <button class="btn" id="export-btn">Export JSON</button>
+        <button class="btn icon" id="theme-btn" type="button"></button>
         <input type="file" id="file-input" accept="application/json" hidden />
       </div>
     </div>
@@ -1272,7 +1857,7 @@
     </section>
 
     <div class="lane-grid">
-      <section class="panel">
+      <section class="panel" id="today-panel">
         <div class="panel-header">
           <h2>Tasks Today</h2>
           <span class="count" id="today-count">0</span>
@@ -1284,7 +1869,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="tomorrow-panel">
         <div class="panel-header">
           <h2>Tasks Tomorrow</h2>
           <span class="count" id="tomorrow-count">0</span>
@@ -1321,7 +1906,11 @@
     <section class="panel" style="margin-bottom:18px;">
       <div class="panel-header">
         <h2>Filter</h2>
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="filter-controls">
+          <div class="filter-search-wrap">
+            <input id="filter-search" class="filter-search" type="search" placeholder="Search tasks…" autocomplete="off" aria-label="Search tasks" />
+            <kbd>/</kbd>
+          </div>
           <select id="filter-status" class="filter-select">
             <option value="">— All statuses —</option>
             <option value="open">Open</option>
@@ -1414,11 +2003,11 @@
         <div class="form-field">
           <label>Status</label>
           <select id="form-status">
-            <option value="open" selected>open</option>
-            <option value="in_progress">in_progress</option>
-            <option value="blocked">blocked</option>
-            <option value="done">done</option>
-            <option value="wont_do">won't do</option>
+            <option value="open" selected>Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="blocked">Blocked</option>
+            <option value="done">Done</option>
+            <option value="wont_do">Won't do</option>
           </select>
         </div>
         <div class="form-field">
@@ -1454,6 +2043,7 @@
         </div>
       </div>
       <div class="modal-actions">
+        <span class="modal-hint"><span><kbd>Esc</kbd> close</span><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> save</span></span>
         <button class="btn" id="modal-cancel">Cancel</button>
         <button class="btn primary" id="modal-add">Save</button>
       </div>
@@ -1475,6 +2065,20 @@
       task: 'Task',
       subtask: 'Subtask'
     };
+
+    const statusLabels = {
+      open: 'Open',
+      in_progress: 'In progress',
+      blocked: 'Blocked',
+      done: 'Done',
+      wont_do: "Won't do"
+    };
+
+    // Nodes without a status behave as open everywhere else, so show them that way too
+    function statusPillHtml(node) {
+      const status = node.status || 'open';
+      return `<span class="pill status-${escapeHtml(status)}">${escapeHtml(statusLabels[status] || status)}</span>`;
+    }
 
     // Linear type ladder used to elevate/lower a node's type. subtask is the floor
     // (typeChildren.subtask === 'subtask' already reflects that self-loop); space is the ceiling.
@@ -1832,6 +2436,7 @@
 
       // Build content
       popup.innerHTML = renderNodeCardContent(node);
+      popup.style.setProperty('--pc', `var(--p${node.priority || 1})`);
 
       // Add burger menu in the node-head
       const head = popup.querySelector('.node-head');
@@ -2140,7 +2745,8 @@
       const isToday   = node.target_date === today;
       const cls = isOverdue ? 'pill pill-date-overdue' : isToday ? 'pill pill-date-today' : 'pill pill-date';
       const icon = node.date_fixed ? '🔒' : '📅';
-      const title = node.date_fixed ? 'Target date (fixed — won\'t move with "postpone 1 day")' : 'Target date';
+      const full = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      const title = node.date_fixed ? `Target: ${full} (fixed — won't move with "postpone 1 day")` : `Target: ${full}`;
       return `<span class="${cls}" title="${title}">${icon} ${day}. ${escapeHtml(mon)}</span>`;
     }
 
@@ -2157,28 +2763,43 @@
                 </div>
                 <div class="node-pills-row">
                   <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
-                  <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+                  ${statusPillHtml(node)}
                   ${countPillsHtml(node)}
                   ${timePillHtml(node)}
                   ${datePillHtml(node)}
                 </div>
               </div>
             </div>
-            <div class="node-body">
-              <div>
-                <div class="label">Description</div>
-                <div class="value">${escapeHtml(node.description || '—')}</div>
-              </div>
-              <div>
-                <div class="label">Target</div>
-                <div class="value">${escapeHtml(formatDate(node.target_date))}</div>
-                <div class="label" style="margin-top:8px;">Relations</div>
-                <div class="value">${escapeHtml(getRelationsText(node))}</div>
-              </div>
-            </div>
+            ${progressHtml(node)}
+            ${nodeDetailsHtml(node)}
           </div>
         </div>
       `;
+    }
+
+    // Description and relations, each only when set — empty "—" rows just add height
+    function nodeDetailsHtml(node) {
+      const desc = (node.description || '').trim();
+      const relations = getRelationsText(node);
+      const hasRelations = relations && relations !== '—';
+      if (!desc && !hasRelations) return '';
+      return `<div class="node-details">
+        ${desc ? `<div class="node-desc">${escapeHtml(desc)}</div>` : ''}
+        ${hasRelations ? `<div class="node-relations"><span class="rel-label">Related</span>${escapeHtml(relations)}</div>` : ''}
+      </div>`;
+    }
+
+    // Completion bar for containers (Spaces / Projects) that hold countable tasks
+    function progressHtml(node) {
+      if (node.type !== 'space' && node.type !== 'project') return '';
+      const { done, pending } = calcTaskCounts(node);
+      const total = done + pending;
+      if (!total) return '';
+      const pct = Math.round(done / total * 100);
+      return `<div class="progress" title="${done} of ${total} tasks done">
+        <div class="progress-track"><span class="progress-fill" style="width:${pct}%"></span></div>
+        <span class="progress-label">${pct}%</span>
+      </div>`;
     }
 
     function miniCard(node) {
@@ -2243,7 +2864,7 @@
       // Today
       todayListEl.innerHTML = '';
       todayCountEl.textContent = String(todayItems.length);
-      if (!todayItems.length) todayListEl.innerHTML = '<div class="empty">No tasks scheduled for today.</div>';
+      if (!todayItems.length) todayListEl.innerHTML = emptyHtml('☀️', 'Nothing scheduled for today');
       else todayItems.forEach(node => todayListEl.appendChild(miniCard(node)));
 
       todayDoneListEl.innerHTML = '';
@@ -2254,13 +2875,31 @@
       // Tomorrow
       tomorrowListEl.innerHTML = '';
       tomorrowCountEl.textContent = String(tomorrowItems.length);
-      if (!tomorrowItems.length) tomorrowListEl.innerHTML = '<div class="empty">No tasks scheduled for tomorrow.</div>';
+      if (!tomorrowItems.length) tomorrowListEl.innerHTML = emptyHtml('🌙', 'Nothing scheduled for tomorrow');
       else tomorrowItems.forEach(node => tomorrowListEl.appendChild(miniCard(node)));
 
       tomorrowDoneListEl.innerHTML = '';
       tomorrowDoneCountEl.textContent = String(doneTomorrowItems.length);
       tomorrowDoneWrapEl.style.display = doneTomorrowItems.length ? '' : 'none';
       doneTomorrowItems.forEach(node => tomorrowDoneListEl.appendChild(miniCardDone(node)));
+
+      renderHeaderSummary(overdueItems.length, todayItems.length, tomorrowItems.length, doneTodayItems.length);
+    }
+
+    function emptyHtml(icon, text) {
+      return `<div class="empty"><span class="empty-icon" aria-hidden="true">${icon}</span>${escapeHtml(text)}</div>`;
+    }
+
+    function renderHeaderSummary(overdue, today, tomorrow, doneToday) {
+      const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+      const chip = (href, cls, n, label) =>
+        `<a class="stat-chip ${cls}" href="${href}"><b>${n}</b> ${label}</a>`;
+      let html = `<span class="header-date">${escapeHtml(dateStr)}</span>`;
+      if (overdue) html += chip('#overdue-panel', 'danger', overdue, 'overdue');
+      html += chip('#today-panel', '', today, 'today');
+      html += chip('#tomorrow-panel', '', tomorrow, 'tomorrow');
+      if (doneToday) html += `<span class="stat-chip ok"><b>${doneToday}</b> done today</span>`;
+      document.getElementById('header-summary').innerHTML = html;
     }
 
     function renderDone() {
@@ -2280,15 +2919,14 @@
       });
       Object.entries(byUser).sort((a, b) => b[1].hours - a[1].hours).forEach(([u, s]) => {
         const pill = document.createElement('span');
-        pill.className = 'pill';
-        pill.style.cssText = 'background:#f0f9ff;border-color:#7dd3fc;color:#0369a1;font-size:11px;';
+        pill.className = 'pill pill-user';
         const hoursStr = s.hours ? ` · ${formatTime(s.hours)}` : '';
         pill.textContent = `${u}: ${s.count}${hoursStr}`;
         summaryEl.appendChild(pill);
       });
 
       if (!doneNodes.length) {
-        doneListEl.innerHTML = '<div class="empty">Nothing completed yet.</div>';
+        doneListEl.innerHTML = emptyHtml('🌱', 'Nothing completed yet');
         return;
       }
       doneNodes.forEach(node => doneListEl.appendChild(miniCardDone(node)));
@@ -2322,6 +2960,26 @@
     const savedCollapsed = localStorage.getItem(DONE_COLLAPSED_KEY);
     setDoneCollapsed(savedCollapsed === null ? true : savedCollapsed === '1');
 
+    // A small confetti burst at (x, y) — skipped when the user prefers reduced motion
+    function celebrate(x, y) {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const colors = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
+      for (let i = 0; i < 28; i++) {
+        const bit = document.createElement('span');
+        bit.className = 'confetti';
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 60 + Math.random() * 110;
+        bit.style.left = x + 'px';
+        bit.style.top = y + 'px';
+        bit.style.background = colors[i % colors.length];
+        bit.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+        bit.style.setProperty('--dy', `${Math.sin(angle) * dist + 40}px`);
+        bit.style.setProperty('--rot', `${Math.round(Math.random() * 720 - 360)}deg`);
+        bit.addEventListener('animationend', () => bit.remove());
+        document.body.appendChild(bit);
+      }
+    }
+
     function createMenu(node, options = {}) {
       const { doneSection = false, allowAddChild = true, allowEdit = true, allowDelete = true } = options;
       const wrap = document.createElement('div');
@@ -2349,8 +3007,9 @@
       if (!doneSection && !isResolved(node.status)) {
         const completeBtn = document.createElement('button');
         completeBtn.innerHTML = '<span aria-hidden="true" class="menu-icon">✅</span>Complete';
-        completeBtn.addEventListener('click', () => {
+        completeBtn.addEventListener('click', (e) => {
           if (!window.confirm(`Mark "${data.nodes[node.id].name}" as done?`)) return;
+          celebrate(e.clientX, e.clientY);
           data.nodes[node.id].status = 'done';
           data.nodes[node.id].collapsed = true;
           data.nodes[node.id].completed_date = data.nodes[node.id].target_date || dateKey(0);
@@ -2465,7 +3124,7 @@
           const pills = document.createElement('div');
           pills.className = 'compact-child-pills';
           const datePill = datePillHtml(child);
-          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span><span class="pill status-${escapeHtml(child.status)}">${escapeHtml(child.status)}</span>${countPillsHtml(child)}${timePillHtml(child)}${datePill}`;
+          pills.innerHTML = `<span class="pill">${escapeHtml(typeLabels[child.type] || child.type)}</span>${statusPillHtml(child)}${countPillsHtml(child)}${timePillHtml(child)}${datePill}`;
           card.appendChild(pills);
         } else {
           // grandchild: show time + date inline if available
@@ -2569,12 +3228,13 @@
         pillsRow.className = 'node-pills-row';
         pillsRow.innerHTML = `
           <span class="pill">${escapeHtml(typeLabels[node.type] || node.type)}</span>
-          <span class="pill status-${escapeHtml(node.status)}">${escapeHtml(node.status)}</span>
+          ${statusPillHtml(node)}
           ${countPillsHtml(node)}
           ${timePillHtml(node)}
           ${datePillHtml(node)}
         `;
         headLeft.appendChild(pillsRow);
+        headLeft.insertAdjacentHTML('beforeend', progressHtml(node));
         head.appendChild(headLeft);
 
         // Expand button (replaces burger when compact)
@@ -2679,6 +3339,12 @@
       return '#14532d';                         // 12+h  — very dark green
     }
 
+    // The heatmap computes in hex; swap the two neutral fills for theme tokens at paint time
+    const CAL_EMPTY = '#f8fafc', CAL_RESERVED = '#cbd5e1';
+    function calThemed(css) {
+      return css.replaceAll(CAL_EMPTY, 'var(--cal-empty)').replaceAll(CAL_RESERVED, 'var(--cal-reserved)');
+    }
+
     function mixHex(hex1, hex2, ratio) {
       const a = hex1.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
       const b = hex2.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
@@ -2744,7 +3410,7 @@
       ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((d, i) => {
         const el = document.createElement('div');
         el.className = 'cal-dow';
-        if (i >= 5) el.style.color = '#e11d48';
+        if (i >= 5) el.style.color = 'var(--weekend)';
         el.textContent = d;
         grid.appendChild(el);
       });
@@ -2795,23 +3461,27 @@
 
         const el = document.createElement('div');
         el.className = 'cal-day' + (isTodayCell ? ' today' : '') + (wx ? '' : ' no-weather') + (reserved ? ' reserved' : '');
-        el.style.background = reservedWithLoad
+        el.style.background = calThemed(reservedWithLoad
           ? mixHex(bgColor, '#cbd5e1', 0.35)
-          : (reserved ? '#cbd5e1' : bgColor);
+          : (reserved ? '#cbd5e1' : bgColor));
         // Today: diagonal split — top-left = still to do, bottom-right = done so far
         if (isTodayCell) {
           let doneC = doneColor(doneHours);
           let todoC = dayColor(nodes.length ? totalHours : 0);
           if (reserved) { doneC = mixHex(doneC, '#cbd5e1', 0.35); todoC = mixHex(todoC, '#cbd5e1', 0.35); }
-          el.style.background = `linear-gradient(135deg, ${todoC} 50%, ${doneC} 50%)`;
+          el.style.background = calThemed(`linear-gradient(135deg, ${todoC} 50%, ${doneC} 50%)`);
         }
-        el.style.color = textDark ? 'white' : '#1e293b';
+        // Theme-neutral fills (empty / plain reserved) take the page ink; pastel load colours keep dark ink
+        const fillUnderNumber = isTodayCell ? (reserved ? null : dayColor(nodes.length ? totalHours : 0))
+          : (reservedWithLoad ? null : (reserved ? CAL_RESERVED : bgColor));
+        const neutralFill = fillUnderNumber === CAL_EMPTY || fillUnderNumber === CAL_RESERVED;
+        el.style.color = textDark ? 'white' : (neutralFill ? 'var(--text)' : '#1e293b');
 
         // Day number — top-left corner when weather shown, centred otherwise
         const isWeekend = dow >= 5;
         const numEl = document.createElement('div');
         numEl.className = 'cal-day-num';
-        if (isWeekend && !textDark) numEl.style.color = '#e11d48';
+        if (isWeekend && !textDark) numEl.style.color = 'var(--weekend)';
         numEl.style.opacity = isWeekend && !textDark ? '1' : '';
         numEl.textContent = day;
         el.appendChild(numEl);
@@ -2827,7 +3497,7 @@
             tempEl.className = 'cal-weather-temp';
             tempEl.textContent = `${Math.round(wx.temp_max)}/${Math.round(wx.temp_min)}°`;
             // Today: the temp sits on the bottom-right (done) half, so its contrast follows done hours
-            if (isTodayCell) tempEl.style.color = doneHours >= 6 ? 'white' : '#1e293b';
+            if (isTodayCell) tempEl.style.color = doneHours >= 6 ? 'white' : (doneHours || reserved ? '#1e293b' : 'var(--text)');
             el.appendChild(tempEl);
           }
           if (wx.isHistory) el.style.opacity = '0.75';
@@ -2874,7 +3544,7 @@
 
           if ((isPast || isTodayCell) && doneNodes.length) {
             const mt = openFirst && nodes.length ? 'margin:6px 0 4px' : 'margin-bottom:4px';
-            doneHtml += `<div style="font-size:11px;font-weight:700;color:#15803d;${mt};">✓ Completed</div>`;
+            doneHtml += `<div style="font-size:11px;font-weight:700;color:var(--ok-ink);${mt};">✓ Completed</div>`;
             doneHtml += doneNodes.map(n => {
               const hasChildren = (n.children || []).some(id => data.nodes[id] && !data.nodes[id].archived);
               const t = doneNodeHours(n);
@@ -2884,7 +3554,7 @@
               const wontStyle = n.status === 'wont_do' ? ' style="color:var(--muted)" title="Won\'t do"' : '';
               return `<div class="cal-tooltip-task" data-node-id="${n.id}"><span class="priority-dot dot-p${n.priority||1}" style="flex:0 0 auto"></span><span class="cal-tooltip-task-name"${wontStyle}>${prefix}${escapeHtml(n.name)}${tStr}${byStr}</span></div>`;
             }).join('');
-            if (doneHours) doneHtml += `<div class="cal-tooltip-time" style="color:#15803d">Total: ${formatTime(doneHours)}</div>`;
+            if (doneHours) doneHtml += `<div class="cal-tooltip-time" style="color:var(--ok-ink)">Total: ${formatTime(doneHours)}</div>`;
           }
 
           if (nodes.length) {
@@ -2953,7 +3623,7 @@
       if (monthTodoHours) summaryHtml += `<span class="pill pill-time-sum">⏱ ${formatTime(monthTodoHours)}</span>`;
       Object.entries(monthDoneByUser).sort((a, b) => b[1] - a[1]).forEach(([u, h]) => {
         const hStr = h ? ` · ${formatTime(h)}` : '';
-        summaryHtml += `<span class="pill" style="background:#f0f9ff;border-color:#7dd3fc;color:#0369a1;font-size:11px;">${escapeHtml(u)}${hStr}</span>`;
+        summaryHtml += `<span class="pill pill-user">${escapeHtml(u)}${hStr}</span>`;
       });
       summaryEl.innerHTML = summaryHtml;
       summaryEl.style.display = summaryHtml ? 'flex' : 'none';
@@ -2963,18 +3633,20 @@
     function renderFilter() {
       const status   = document.getElementById('filter-status').value;
       const priority = document.getElementById('filter-priority').value;
+      const query    = document.getElementById('filter-search').value.trim().toLowerCase();
       const allNodes = Object.values(data.nodes).filter(n => !n.archived);
 
       const matched = allNodes.filter(n => {
         if (status   && n.status   !== status)   return false;
         if (priority && String(n.priority) !== priority) return false;
+        if (query && !`${n.name || ''}\n${n.description || ''}`.toLowerCase().includes(query)) return false;
         return true;
       });
 
       filterListEl.innerHTML = '';
       filterCountEl.textContent = String(matched.length);
       if (!matched.length) {
-        filterListEl.innerHTML = '<div class="empty">No matching tasks.</div>';
+        filterListEl.innerHTML = emptyHtml('🔍', 'No matching tasks');
       } else {
         matched.forEach(node => filterListEl.appendChild(miniCard(node)));
       }
@@ -3595,8 +4267,8 @@
         <div class="cdp-grid">
           <div class="cdp-dow">Mo</div><div class="cdp-dow">Tu</div><div class="cdp-dow">We</div>
           <div class="cdp-dow">Th</div><div class="cdp-dow">Fr</div>
-          <div class="cdp-dow" style="color:#e11d48">Sa</div>
-          <div class="cdp-dow" style="color:#e11d48">Su</div>
+          <div class="cdp-dow" style="color:var(--weekend)">Sa</div>
+          <div class="cdp-dow" style="color:var(--weekend)">Su</div>
       `;
 
       const firstDay = new Date(year, month, 1);
@@ -3613,7 +4285,7 @@
         let cls = 'cdp-cell';
         if (iso === todayKey) cls += ' cdp-today';
         if (iso === selectedIso) cls += ' cdp-selected';
-        const color = (!cls.includes('cdp-selected') && isWeekend) ? 'style="color:#e11d48"' : '';
+        const color = (!cls.includes('cdp-selected') && isWeekend) ? 'style="color:var(--weekend)"' : '';
         html += `<div class="${cls}" data-iso="${iso}" ${color}>${d}</div>`;
       }
 
@@ -3720,10 +4392,28 @@
 
     // Escape key dismisses peek popup
     document.addEventListener('keydown', (e) => {
+      if (document.getElementById('modal-backdrop').classList.contains('open')) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); addNode(); return; }
+        // Let the Move-to combo and the date picker consume their own Escape first
+        if (e.key === 'Escape' && !(e.target instanceof Element && e.target.closest('.combo'))
+            && !document.getElementById('custom-date-picker').classList.contains('open')) {
+          closeAddDialog();
+          return;
+        }
+      }
       if (e.key === 'Escape') { hidePeekPopup(); hideCalTooltip(); }
+      if (e.key === 'Escape' && e.target.id === 'filter-search') { e.target.blur(); return; }
       // Ignore when typing in an input/textarea or modal is open
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       if (document.getElementById('modal-backdrop').classList.contains('open')) return;
+
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const search = document.getElementById('filter-search');
+        search.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        search.focus({ preventScroll: true });
+        return;
+      }
 
       if (e.key === 'n' || e.key === 'N') {
         if (hoveredNodeId && data.nodes[hoveredNodeId]) {
@@ -3828,6 +4518,7 @@
 
     document.getElementById('filter-status').addEventListener('change', renderFilter);
     document.getElementById('filter-priority').addEventListener('change', renderFilter);
+    document.getElementById('filter-search').addEventListener('input', renderFilter);
 
     document.getElementById('postpone-all-btn').addEventListener('click', postponeAllScheduled);
     document.getElementById('bring-back-all-btn').addEventListener('click', bringBackAllScheduled);
@@ -3848,6 +4539,32 @@
       document.getElementById('cal-expand').textContent = isExpanded ? '⤡' : '⤢';
       document.getElementById('cal-expand').title = isExpanded ? 'Collapse calendar' : 'Expand calendar';
     });
+
+    const THEME_KEY = 'ttp-theme';
+    const themeMeta = {
+      auto:  { icon: '🌓', next: 'light', title: 'Theme: follows system — click for light' },
+      light: { icon: '☀️', next: 'dark',  title: 'Theme: light — click for dark' },
+      dark:  { icon: '🌙', next: 'auto',  title: 'Theme: dark — click to follow system' },
+    };
+    const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+    function themePref() {
+      try { return themeMeta[localStorage.getItem(THEME_KEY)] ? localStorage.getItem(THEME_KEY) : 'auto'; } catch { return 'auto'; }
+    }
+    function applyTheme() {
+      const pref = themePref();
+      const dark = pref === 'dark' || (pref === 'auto' && darkQuery.matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      const btn = document.getElementById('theme-btn');
+      btn.textContent = themeMeta[pref].icon;
+      btn.title = themeMeta[pref].title;
+      btn.setAttribute('aria-label', themeMeta[pref].title);
+    }
+    document.getElementById('theme-btn').addEventListener('click', () => {
+      try { localStorage.setItem(THEME_KEY, themeMeta[themePref()].next); } catch {}
+      applyTheme();
+    });
+    darkQuery.addEventListener('change', applyTheme);
+    applyTheme();
 
     async function initInstance() {
       if (!IS_HTTP) return;
