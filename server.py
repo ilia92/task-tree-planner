@@ -946,26 +946,45 @@ LOGIN_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Task Tree Planner — Login</title>
   <style>
-    :root { --green: #10b981; --red: #ef4444; --line: #d1d5db; }
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f5fa; --panel: #ffffff; --field: #fbfcfe; --line: #e3e6ee;
+      --text: #0f172a; --muted: #64748b; --accent: #6366f1; --red: #ef4444;
+      --ring: rgba(99,102,241,0.28); --glow-1: rgba(99,102,241,0.14); --glow-2: rgba(16,185,129,0.10);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0f19; --panel: #121929; --field: #0e1422; --line: #232e45;
+        --text: #e6eaf3; --muted: #8a96ad; --accent: #818cf8; --red: #f87171;
+        --ring: rgba(129,140,248,0.32); --glow-1: rgba(99,102,241,0.18); --glow-2: rgba(16,185,129,0.08);
+      }
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #f3f4f6;
-      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 0% 0%, var(--glow-1), transparent 60%),
+        radial-gradient(800px 500px at 100% 100%, var(--glow-2), transparent 60%),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     .card {
-      background: white;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 24px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+      box-shadow: 0 2px 6px rgba(15,23,42,0.06), 0 24px 48px -12px rgba(15,23,42,0.22);
       padding: 40px 36px;
       width: min(380px, 92vw);
+      animation: rise 0.35s cubic-bezier(0.2,0.8,0.2,1);
     }
-    h1 { font-size: 22px; margin-bottom: 6px; }
-    .sub { font-size: 13px; color: #6b7280; margin-bottom: 28px; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+    h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
     .form-field { margin-bottom: 14px; }
     label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
     input[type=text], input[type=password] {
@@ -973,17 +992,19 @@ LOGIN_HTML = """<!DOCTYPE html>
       padding: 11px 14px;
       border: 1px solid var(--line);
       border-radius: 12px;
+      background: var(--field);
+      color: var(--text);
       font: inherit;
       font-size: 15px;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    input[type=text]:focus, input[type=password]:focus { border-color: var(--green); }
+    input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
     .error {
       margin-top: 4px;
       padding: 10px 14px;
-      background: #fef2f2;
-      border: 1px solid #fca5a5;
+      background: color-mix(in srgb, var(--red) 10%, var(--panel));
+      border: 1px solid color-mix(in srgb, var(--red) 35%, var(--panel));
       border-radius: 10px;
       font-size: 13px;
       color: var(--red);
@@ -994,7 +1015,7 @@ LOGIN_HTML = """<!DOCTYPE html>
       margin-top: 6px;
       width: 100%;
       padding: 12px;
-      background: #111827;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
       color: white;
       border: none;
       border-radius: 12px;
@@ -1002,10 +1023,22 @@ LOGIN_HTML = """<!DOCTYPE html>
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.15s;
+      box-shadow: 0 8px 20px -6px rgba(99,102,241,0.55);
+      transition: filter 0.15s, transform 0.15s;
     }
-    button:hover { opacity: 0.88; }
-    .tree-icon { font-size: 36px; margin-bottom: 16px; }
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .tree-icon {
+      display: grid;
+      place-items: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      font-size: 30px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, #ecfdf5, #a7f3d0);
+      box-shadow: inset 0 0 0 1px rgba(16,185,129,0.25), 0 6px 16px -6px rgba(16,185,129,0.5);
+    }
+    @media (prefers-color-scheme: dark) { .tree-icon { background: linear-gradient(135deg, #064e3b, #065f46); } }
   </style>
 </head>
 <body>
