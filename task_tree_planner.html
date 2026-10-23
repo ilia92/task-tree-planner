@@ -3304,7 +3304,7 @@
 
     function renderRoots() {
       rootsEl.innerHTML = '';
-      let treeDone = 0, treePending = 0;
+      let treeDone = 0, treePending = 0, treeTimeDone = 0, treeTimeTodo = 0;
       (data.settings.root_ids || []).forEach(id => {
         const node = data.nodes[id];
         if (!node || node.archived || isResolved(node.status)) return;
@@ -3312,10 +3312,18 @@
         const c = calcTaskCounts(node);
         treeDone    += c.done;
         treePending += c.pending;
+        const t = calcTimeSplit(node);
+        treeTimeDone += t.done;
+        treeTimeTodo += t.todo;
       });
 
+      // Same ✅ invested / ⏱ left pills as Space and Project cards
+      let timeHtml = '';
+      if (treeTimeDone > 0) timeHtml += `<span class="pill pill-time-done" title="Hours invested">✅ ${escapeHtml(formatTime(treeTimeDone))}</span>`;
+      if (treeTimeTodo > 0) timeHtml += `<span class="pill pill-time-sum" title="Hours left">⏱ ${escapeHtml(formatTime(treeTimeTodo))}</span>`;
+
       const treeCountEl = document.getElementById('tree-count');
-      if (treeCountEl) treeCountEl.innerHTML = countPillsMarkup(treeDone, treePending);
+      if (treeCountEl) treeCountEl.innerHTML = countPillsMarkup(treeDone, treePending) + timeHtml;
     }
 
     // ── Calendar heatmap ────────────────────────────────────────────────────
